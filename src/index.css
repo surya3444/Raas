@@ -1,0 +1,64 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand: #3b82f6;
+  --color-bg: #09090b;
+  --color-surface: #18181b;
+  --color-border: #27272a;
+  --font-sans: 'Inter', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+body {
+  @apply bg-bg text-white font-sans overflow-hidden;
+}
+
+/* Glass Effects */
+.glass-panel {
+  background: rgba(24, 24, 27, 0.7);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 16px;
+}
+
+.glass-sidebar {
+  background: #121214;
+  border-right: 1px solid #27272a;
+}
+
+/* Form Elements */
+.form-input {
+  @apply w-full bg-[#18181b] border border-[#27272a] px-3 py-2.5 rounded-lg text-sm outline-none text-white transition duration-200;
+}
+.form-input:focus {
+  @apply border-brand;
+}
+
+/* Toggle Switch */
+.toggle-checkbox {
+  appearance: none;
+  width: 36px;
+  height: 20px;
+  background: #27272a;
+  border-radius: 20px;
+  position: relative;
+  cursor: pointer;
+  transition: 0.3s;
+}
+.toggle-checkbox::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  background: white;
+  border-radius: 50%;
+  transition: 0.3s;
+}
+.toggle-checkbox:checked {
+  background: #3b82f6;
+}
+.toggle-checkbox:checked::after {
+  transform: translateX(16px);
+}
