@@ -174,6 +174,9 @@ const MapCanvas = ({
                     
                     {/* RENDER ELEMENTS */}
                     {(layout?.elements || []).map((el, i) => {
+                        // --- SAFETY CHECK: Skip elements without points to prevent crash ---
+                        if (!el.points) return null;
+
                         const isInfra = el.type === 'infra';
                         let styleClass = '';
 
@@ -186,11 +189,15 @@ const MapCanvas = ({
                             else if (el.status === 'booked') styleClass = 'fill-yellow-500/40 stroke-yellow-400';
                             else styleClass = 'fill-blue-500/10 stroke-blue-400/50';
                         }
+                        
+                        // Safe text positioning
+                        const firstPoint = el.points.split(' ')[0] || "0,0";
+                        const [tx, ty] = firstPoint.split(',');
 
                         return (
                             <g key={i} onClick={(e) => { if(tool === 'select') { e.stopPropagation(); onSelect(el.id); } }}>
                                 <polygon points={el.points} vectorEffect="non-scaling-stroke" className={`transition-all duration-200 ${tool === 'select' ? 'cursor-pointer hover:stroke-white hover:fill-white/20' : ''} ${styleClass} ${selectedId === el.id ? 'stroke-white stroke-[2px] fill-white/30' : 'stroke-[1px]'}`} />
-                                {view.scale > 0.5 && <text x={el.points.split(' ')[0].split(',')[0]} y={el.points.split(' ')[0].split(',')[1]} fill="white" fontSize={isInfra ? "14" : "12"} fontWeight="bold" dx="4" dy="14" pointerEvents="none" style={{ textShadow: '0 1px 2px black' }}>{isInfra ? el.name : el.id}</text>}
+                                {view.scale > 0.5 && <text x={tx} y={ty} fill="white" fontSize={isInfra ? "14" : "12"} fontWeight="bold" dx="4" dy="14" pointerEvents="none" style={{ textShadow: '0 1px 2px black' }}>{isInfra ? el.name : el.id}</text>}
                             </g>
                         );
                     })}

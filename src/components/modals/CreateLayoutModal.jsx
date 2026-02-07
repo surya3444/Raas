@@ -21,8 +21,12 @@ const CreateLayoutModal = ({ user, currentLayoutCount, currentTotalPlots, onClos
     // Calculate remaining plots available globally
     const remainingPlots = globalMaxPlots - currentTotalPlots;
 
+    // --- FIXED: Append new files instead of replacing ---
     const handleFileChange = (e) => {
-        if (e.target.files) setFiles(Array.from(e.target.files));
+        if (e.target.files && e.target.files.length > 0) {
+            // Append new files to the existing list
+            setFiles(prevFiles => [...prevFiles, ...Array.from(e.target.files)]);
+        }
     };
 
     const removeFile = (idx) => {
@@ -147,6 +151,7 @@ const CreateLayoutModal = ({ user, currentLayoutCount, currentTotalPlots, onClos
                             <p className="text-xs text-gray-400">Click to upload brochures, legal docs, etc.</p>
                         </div>
                         
+                        {/* Display list of selected files */}
                         {files.length > 0 && (
                             <div className="mt-2 space-y-1">
                                 {files.map((f, i) => (

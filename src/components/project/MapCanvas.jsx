@@ -65,18 +65,20 @@ const MapCanvas = ({ layout }) => {
         setPosition({ x: 0, y: 0 });
     };
 
+    // FIX: Increased z-index from z-50 to z-[9999] to cover global navbar
     const containerClass = isFullscreen 
-        ? 'fixed inset-0 z-50 bg-[#09090b] flex flex-col h-screen w-screen' 
+        ? 'fixed inset-0 z-[9999] bg-[#09090b] flex flex-col h-screen w-screen' 
         : 'glass-panel p-4 flex flex-col relative overflow-hidden group h-[400px] transition-all duration-300';
 
     return (
         <div className={containerClass}>
             
             {/* 1. FLOATING CLOSE BUTTON (Only in Fullscreen) */}
+            {/* FIX: Increased z-index from z-[60] to z-[10000] */}
             {isFullscreen && (
                 <button 
                     onClick={() => setIsFullscreen(false)}
-                    className="absolute top-4 right-4 z-[60] bg-red-600/90 hover:bg-red-500 text-white p-2.5 rounded-full shadow-2xl backdrop-blur-sm transition-transform hover:scale-110 flex items-center justify-center border border-white/10"
+                    className="absolute top-40 right-4 z-[10000] bg-red-600/90 hover:bg-red-500 text-white p-2.5 rounded-full shadow-2xl backdrop-blur-sm transition-transform hover:scale-110 flex items-center justify-center border border-white/10"
                 >
                     <X size={20} />
                 </button>

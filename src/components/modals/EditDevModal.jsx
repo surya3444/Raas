@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { db } from '../../firebase';
 import { collection, getDocs, doc, updateDoc, deleteDoc, getDoc, setDoc } from "firebase/firestore";
-import { X, Loader2, Trash2, ShieldAlert, Upload, FileText } from 'lucide-react';
+import { X, Loader2, Trash2, ShieldAlert, Upload, FileText, Download } from 'lucide-react';
 
 const EditDevModal = ({ user, onClose }) => {
     const [plans, setPlans] = useState([]);
@@ -23,7 +23,7 @@ const EditDevModal = ({ user, onClose }) => {
                 const fetchedPlans = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                 setPlans(fetchedPlans);
 
-                // If user has no plan set, default form to first available plan to avoid 'undefined' state
+                // If user has no plan set, default form to first available plan
                 if (!user.planId && fetchedPlans.length > 0) {
                     setFormData(prev => ({ ...prev, planId: fetchedPlans[0].id }));
                 }
@@ -62,7 +62,6 @@ const EditDevModal = ({ user, onClose }) => {
         };
 
         // 2. FORCE UPDATE PLAN DETAILS
-        // Instead of checking if (changed), we always find the selected plan and enforce its limits.
         if (formData.planId && plans.length > 0) {
             const selectedPlan = plans.find(p => p.id === formData.planId);
             
@@ -118,12 +117,28 @@ const EditDevModal = ({ user, onClose }) => {
         setDocuments(newDocs);
     };
 
-    const handleFileUpload = (e) => {
-        if (e.target.files) {
-            const newFiles = Array.from(e.target.files).map(f => ({
-                name: f.name, type: f.type, uploadedAt: new Date()
+    // --- UPDATED: Process files to create Data URLs for downloading ---
+    const handleFileUpload = async (e) => {
+        if (e.target.files && e.target.files.length > 0) {
+            const files = Array.from(e.target.files);
+            
+            // Convert files to Data URLs asynchronously
+            const processedFiles = await Promise.all(files.map(file => {
+                return new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        resolve({
+                            name: file.name,
+                            type: file.type,
+                            uploadedAt: new Date(),
+                            url: event.target.result // Store the base64 data URL
+                        });
+                    };
+                    reader.readAsDataURL(file);
+                });
             }));
-            setDocuments([...documents, ...newFiles]);
+
+            setDocuments([...documents, ...processedFiles]);
         }
     };
 
@@ -208,7 +223,7 @@ const EditDevModal = ({ user, onClose }) => {
                             <label className="text-[10px] font-bold text-gray-500 uppercase">Legal Documents</label>
                             <label className="text-xs text-brand hover:underline cursor-pointer flex items-center gap-1">
                                 <Upload size={12} /> Upload New
-                                <input type="file" className="hidden" onChange={handleFileUpload} />
+                                <input type="file" className="hidden" multiple onChange={handleFileUpload} />
                             </label>
                         </div>
                         
@@ -219,11 +234,38 @@ const EditDevModal = ({ user, onClose }) => {
                                     <div className="flex items-center gap-3">
                                         <div className="p-2 bg-brand/10 text-brand rounded"><FileText size={16} /></div>
                                         <div>
-                                            <p className="text-sm text-white font-medium">{doc.name}</p>
-                                            <p className="text-[10px] text-gray-500">Uploaded: {doc.uploadedAt?.toDate ? doc.uploadedAt.toDate().toLocaleDateString() : 'Just now'}</p>
+                                            {/* Name is a link if URL exists */}
+                                            <a 
+                                                href={doc.url || '#'} 
+                                                download={doc.name}
+                                                className={`text-sm font-medium block truncate max-w-[200px] ${doc.url ? 'text-blue-400 hover:underline hover:text-blue-300' : 'text-white cursor-default'}`}
+                                                onClick={(e) => !doc.url && e.preventDefault()}
+                                            >
+                                                {doc.name}
+                                            </a>
+                                            <p className="text-[10px] text-gray-500">
+                                                {doc.uploadedAt?.toDate ? doc.uploadedAt.toDate().toLocaleDateString() : 'Just now'}
+                                            </p>
                                         </div>
                                     </div>
-                                    <button onClick={() => removeDocument(idx)} className="text-red-500 opacity-0 group-hover:opacity-100 p-2 hover:bg-red-500/10 rounded transition"><Trash2 size={16} /></button>
+                                    
+                                    <div className="flex items-center gap-1">
+                                        {/* Download Button */}
+                                        {doc.url && (
+                                            <a 
+                                                href={doc.url} 
+                                                download={doc.name} 
+                                                className="p-2 text-gray-400 hover:text-blue-400 hover:bg-white/5 rounded transition"
+                                                title="Download"
+                                            >
+                                                <Download size={16} />
+                                            </a>
+                                        )}
+                                        
+                                        <button onClick={() => removeDocument(idx)} className="text-red-500 opacity-0 group-hover:opacity-100 p-2 hover:bg-red-500/10 rounded transition">
+                                            <Trash2 size={16} />
+                                        </button>
+                                    </div>
                                 </div>
                             ))}
                         </div>

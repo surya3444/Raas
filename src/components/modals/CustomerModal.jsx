@@ -1,29 +1,61 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { updateDoc, doc } from "firebase/firestore";
+import { updateDoc, doc, getDoc } from "firebase/firestore"; // Added getDoc
 import { db } from '../../firebase';
 import { X, Trash2, Upload, FileText, Download, User, MapPin, Phone, StickyNote, Ruler, Compass, IndianRupee, Calendar } from 'lucide-react';
 
+// --- UTILITY: Convert Number to Words (Indian Format) ---
+const numberToWords = (num) => {
+    if (!num) return '';
+    const a = ['', 'one ', 'two ', 'three ', 'four ', 'five ', 'six ', 'seven ', 'eight ', 'nine ', 'ten ', 'eleven ', 'twelve ', 'thirteen ', 'fourteen ', 'fifteen ', 'sixteen ', 'seventeen ', 'eighteen ', 'nineteen '];
+    const b = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
+
+    const n = ('000000000' + num).substr(-9).match(/^(\d{2})(\d{2})(\d{2})(\d{1})(\d{2})$/);
+    if (!n) return '';
+
+    let str = '';
+    str += (n[1] != 0) ? (a[Number(n[1])] || b[n[1][0]] + ' ' + a[n[1][1]]) + 'crore ' : '';
+    str += (n[2] != 0) ? (a[Number(n[2])] || b[n[2][0]] + ' ' + a[n[2][1]]) + 'lakh ' : '';
+    str += (n[3] != 0) ? (a[Number(n[3])] || b[n[3][0]] + ' ' + a[n[3][1]]) + 'thousand ' : '';
+    str += (n[4] != 0) ? (a[Number(n[4])] || b[n[4][0]] + ' ' + a[n[4][1]]) + 'hundred ' : '';
+    str += (n[5] != 0) ? ((str != '') ? 'and ' : '') + (a[Number(n[5])] || b[n[5][0]] + ' ' + a[n[5][1]]) : '';
+
+    return str ? str.trim() + ' only' : '';
+};
+
 const CustomerModal = ({ layout, index, data, onClose }) => {
+    // FIX: Initialize with empty strings to prevent "Uncontrolled Input" warning
     const [formData, setFormData] = useState({ 
-        id: '',
-        status: 'open',
-        price: '',
-        size: '',
-        facing: '',
-        bookingAmount: '',
-        bookingDate: '',      // New: Date of Booking
-        purchaseDueDate: '',  // New: Deadline for full payment
-        purchaseDate: '',     // New: Final Purchase Date (for Sold)
-        customerName: '',
-        customerPhone: '',
-        customerAddress: '',
-        remarks: '',
-        documents: [],
-        ...data
+        id: data.id || '',
+        status: data.status || 'open',
+        price: data.price || '',
+        size: data.size || '',
+        facing: data.facing || '',
+        bookingAmount: data.bookingAmount || '',
+        bookingDate: data.bookingDate || '',      
+        purchaseDueDate: data.purchaseDueDate || '',  
+        purchaseDate: data.purchaseDate || '',     
+        customerName: data.customerName || '',
+        customerPhone: data.customerPhone || '',
+        customerAddress: data.customerAddress || '',
+        remarks: data.remarks || '',
+        documents: data.documents || [],
+        ...data // Override with any other props, but defaults above protect against undefined
     });
 
-    useEffect(() => { setFormData({ ...data }); }, [data]);
+    // Sync prop changes safely
+    useEffect(() => { 
+        setFormData(prev => ({ 
+            ...prev, 
+            ...data,
+            // Double protection for dates/money fields
+            bookingDate: data.bookingDate || '',
+            purchaseDueDate: data.purchaseDueDate || '',
+            purchaseDate: data.purchaseDate || '',
+            bookingAmount: data.bookingAmount || '',
+            price: data.price || ''
+        })); 
+    }, [data]);
 
     // Calculate Balance
     const price = Number(formData.price) || 0;
@@ -31,17 +63,52 @@ const CustomerModal = ({ layout, index, data, onClose }) => {
     const balance = price - bookingAmt;
 
     const handleSave = async () => {
-        const newElements = [...layout.elements];
-        newElements[index] = { ...formData };
-        await updateDoc(doc(db, "layouts", layout.id), { elements: newElements });
-        onClose();
+        try {
+            // FIX: Don't rely on 'layout.elements' prop as it might be filtered by the parent.
+            // Fetch the FRESH, COMPLETE list from the database.
+            const layoutRef = doc(db, "layouts", layout.id);
+            const layoutSnap = await getDoc(layoutRef);
+
+            if (layoutSnap.exists()) {
+                const freshData = layoutSnap.data();
+                const allElements = freshData.elements || [];
+
+                // Update the specific element by ID in the master list
+                const newElements = allElements.map(el => 
+                    el.id === data.id ? { ...el, ...formData } : el
+                );
+
+                await updateDoc(layoutRef, { elements: newElements });
+                onClose();
+            }
+        } catch (error) {
+            console.error("Save failed:", error);
+            alert("Failed to save changes: " + error.message);
+        }
     };
 
     const handleDelete = async () => {
         if(!confirm("Delete this plot entry?")) return;
-        const newElements = layout.elements.filter((_, i) => i !== index);
-        await updateDoc(doc(db, "layouts", layout.id), { elements: newElements });
-        onClose();
+        
+        try {
+            // FIX: Same logic as save - fetch fresh list to avoid deleting hidden infra
+            const layoutRef = doc(db, "layouts", layout.id);
+            const layoutSnap = await getDoc(layoutRef);
+
+            if (layoutSnap.exists()) {
+                const freshData = layoutSnap.data();
+                const allElements = freshData.elements || [];
+
+                // Filter out ONLY the current item by ID
+                const newElements = allElements.filter(el => el.id !== data.id);
+                
+                await updateDoc(layoutRef, { elements: newElements });
+                onClose();
+            }
+        } catch (error) {
+            console.error("Delete failed:", error);
+            alert("Failed to delete: " + error.message);
+        }
     };
 
     const handleDocUpload = (e) => {
@@ -148,6 +215,12 @@ const CustomerModal = ({ layout, index, data, onClose }) => {
                                     onChange={e => setFormData({...formData, price: e.target.value})}
                                     placeholder="0"
                                 />
+                                {/* --- MONEY IN WORDS --- */}
+                                {formData.price > 0 && (
+                                    <p className="text-[10px] text-blue-400 mt-1 italic capitalize">
+                                        {numberToWords(formData.price)}
+                                    </p>
+                                )}
                             </div>
                         </div>
 
@@ -166,6 +239,12 @@ const CustomerModal = ({ layout, index, data, onClose }) => {
                                             onChange={e => setFormData({...formData, bookingAmount: e.target.value})}
                                             placeholder="0"
                                         />
+                                        {/* --- MONEY IN WORDS --- */}
+                                        {formData.bookingAmount > 0 && (
+                                            <p className="text-[10px] text-yellow-400 mt-1 italic capitalize">
+                                                {numberToWords(formData.bookingAmount)}
+                                            </p>
+                                        )}
                                     </div>
                                     <div>
                                         <label className="text-[10px] text-gray-500 uppercase font-bold mb-1">Balance Pending</label>

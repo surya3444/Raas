@@ -2,60 +2,86 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { doc, onSnapshot, updateDoc, arrayUnion } from "firebase/firestore";
 import { db } from '../../firebase';
-import { useNexus } from '../../context/NexusContext';
 import MapCanvas from '../../components/nexus/map/MapCanvas';
 import MapToolbar from '../../components/nexus/map/MapToolbar';
 import NewElementModal from '../../components/nexus/modals/NewElementModal';
-import { ArrowLeft, Save, MousePointer2, Ruler, Loader2, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, Ruler, Loader2, CheckCircle2 } from 'lucide-react';
 
 const NexusBlueprintEditor = () => {
     const { id } = useParams();
     const navigate = useNavigate();
-    const { activeCollection } = useNexus();
+    const activeCollection = "layouts"; 
+
     const [layout, setLayout] = useState(null);
     
     // Editor State
     const [tool, setTool] = useState('select');
     const [selectedId, setSelectedId] = useState(null);
     const [isSaving, setIsSaving] = useState(false);
-    
-    // Drawing Workflow
     const [pendingPoints, setPendingPoints] = useState(null); 
 
     useEffect(() => {
         const unsub = onSnapshot(doc(db, activeCollection, id), (docSnap) => {
-            if (docSnap.exists()) setLayout({ id: docSnap.id, ...docSnap.data() });
+            if (docSnap.exists()) {
+                setLayout({ id: docSnap.id, ...docSnap.data() });
+            }
         });
         return () => unsub();
     }, [id, activeCollection]);
 
-    // 1. Drawing Finished -> Open Unified Modal
+    // --- KEYBOARD SHORTCUTS (DELETE) ---
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            // Check if Delete or Backspace is pressed AND an ID is selected
+            if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId) {
+                handleDeleteElement();
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [selectedId, layout]); // Re-bind when selection changes
+
+    // --- ACTIONS ---
+
+    const handleMapUpload = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = async (ev) => {
+            const base64Image = ev.target.result;
+            setLayout(prev => ({ ...prev, bgImage: base64Image }));
+            setIsSaving(true);
+            try {
+                await updateDoc(doc(db, activeCollection, id), { bgImage: base64Image });
+            } catch (error) {
+                console.error("Error saving map:", error);
+                alert("Failed to save map image.");
+            }
+            setIsSaving(false);
+        };
+        reader.readAsDataURL(file);
+    };
+
     const handleDrawComplete = (pointsStr) => {
         setPendingPoints(pointsStr); 
     };
 
-    // 2. Universal Save Handler (Handles both Plots & Infra)
     const handleSaveElement = async (data) => {
         if (!layout) return;
         setIsSaving(true);
-
         let newElement = {};
 
         if (data.type === 'plot') {
             newElement = {
                 id: data.id,
                 type: 'plot',
-                status: 'open', // Default status for sellable units
+                status: 'open',
                 points: data.points,
-                dimensions: data.dimensions,
-                facing: data.facing,
-                price: data.price,
                 createdAt: new Date().toISOString()
             };
         } else {
-            // Infrastructure (Roads, Parks, Amenities)
             newElement = {
-                id: `INF-${Date.now()}`, // Auto-generate ID
+                id: `INF-${Date.now()}`,
                 type: 'infra',
                 name: data.name,
                 category: data.category,
@@ -67,10 +93,34 @@ const NexusBlueprintEditor = () => {
         try {
             await updateDoc(doc(db, activeCollection, id), { elements: arrayUnion(newElement) });
             setPendingPoints(null); 
-            setTool('select'); // Reset to select mode after successful save
+            setTool('select'); 
         } catch (e) {
             console.error(e);
             alert("Error saving element: " + e.message);
+        }
+        setIsSaving(false);
+    };
+
+    // --- NEW: DELETE HANDLER ---
+    const handleDeleteElement = async () => {
+        if (!selectedId || !layout) return;
+
+        // Optional: Confirm before delete
+        if(!window.confirm("Are you sure you want to delete this element?")) return;
+
+        setIsSaving(true);
+        try {
+            // Filter out the selected element
+            const updatedElements = layout.elements.filter(el => el.id !== selectedId);
+            
+            // Push update to Firestore
+            await updateDoc(doc(db, activeCollection, id), { elements: updatedElements });
+            
+            setSelectedId(null); // Clear selection
+            console.log("Deleted:", selectedId);
+        } catch (e) {
+            console.error(e);
+            alert("Delete failed: " + e.message);
         }
         setIsSaving(false);
     };
@@ -80,7 +130,7 @@ const NexusBlueprintEditor = () => {
     return (
         <div className="h-screen w-screen bg-[#050505] flex flex-col overflow-hidden font-sans text-white">
             
-            {/* --- PREMIUM HEADER --- */}
+            {/* Header */}
             <div className="h-16 bg-[#09090b]/90 backdrop-blur-md border-b border-white/10 flex justify-between items-center px-6 shrink-0 z-50">
                 <div className="flex items-center gap-6">
                     <button onClick={() => navigate(`/nexus/view/${id}`)} className="text-slate-400 hover:text-white flex items-center gap-2 text-xs font-bold transition group">
@@ -109,14 +159,20 @@ const NexusBlueprintEditor = () => {
                 </div>
             </div>
 
-            {/* --- WORKSPACE --- */}
+            {/* Workspace */}
             <div className="flex-1 relative overflow-hidden cursor-crosshair bg-[#0e0e10]">
                 {/* Floating Toolbar */}
                 <div className="absolute top-6 left-6 z-40">
-                    <MapToolbar tool={tool} setTool={setTool} />
+                    <MapToolbar 
+                        tool={tool} 
+                        setTool={setTool} 
+                        onUpload={handleMapUpload} 
+                        selectedId={selectedId}     /* <--- Pass Selected ID */
+                        onDelete={handleDeleteElement} /* <--- Pass Delete Handler */
+                    />
                 </div>
                 
-                {/* Canvas Engine */}
+                {/* Canvas */}
                 <div className="absolute inset-0 z-0">
                     <MapCanvas 
                         layout={layout}
@@ -129,7 +185,7 @@ const NexusBlueprintEditor = () => {
                 </div>
             </div>
 
-            {/* --- UNIFIED CREATION MODAL --- */}
+            {/* Creation Modal */}
             {pendingPoints && (
                 <NewElementModal 
                     points={pendingPoints}

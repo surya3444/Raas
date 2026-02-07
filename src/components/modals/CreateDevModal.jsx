@@ -21,8 +21,11 @@ const CreateDevModal = ({ onClose }) => {
         return () => document.body.style.overflow = 'unset';
     }, []);
 
+    // --- FIX: Append new files to the existing list instead of replacing them ---
     const handleFileChange = (e) => {
-        if (e.target.files) setFiles(Array.from(e.target.files));
+        if (e.target.files && e.target.files.length > 0) {
+            setFiles(prevFiles => [...prevFiles, ...Array.from(e.target.files)]);
+        }
     };
 
     const handleSubmit = async () => {
