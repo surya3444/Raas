@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { addDoc, collection, query, where, getDocs } from "firebase/firestore";
+import { addDoc, collection, query, where, getDocs, updateDoc, doc } from "firebase/firestore";
+import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db } from '../../../firebase'; 
-import { X, Loader2, MapPin, Tag, Link as LinkIcon, Upload, FileText, Trash2, Ruler, Lock, AlertTriangle, Calendar } from 'lucide-react';
+import { X, Loader2, MapPin, Tag, Link as LinkIcon, Upload, FileText, Trash2, Ruler, Lock, Calendar, Image as ImageIcon } from 'lucide-react';
 import { useNexus } from '../../../context/NexusContext';
 
 const CreateNexusProjectModal = ({ onClose }) => {
@@ -13,13 +14,12 @@ const CreateNexusProjectModal = ({ onClose }) => {
     const [isCheckingLimits, setIsCheckingLimits] = useState(true);
     const [currentCount, setCurrentCount] = useState(0);
     
-    // Updated formData with specific Acres/Guntas support
     const [formData, setFormData] = useState({ 
         name: '', 
         address: '',
         addressLink: '',
         prefix: 'P-',
-        areaMeasurementType: 'Acres & Guntas', // Toggle between composite and single
+        areaMeasurementType: 'Acres & Guntas',
         areaAcres: '',
         areaGuntas: '',
         areaValue: '', 
@@ -27,7 +27,9 @@ const CreateNexusProjectModal = ({ onClose }) => {
         launchDate: '' 
     });
     
+    // Separate states for general files vs the specific layout plan image
     const [files, setFiles] = useState([]);
+    const [planImageFile, setPlanImageFile] = useState(null);
 
     // --- 1. DEFINE LIMITS ---
     const maxLayouts = Number(user?.limits?.maxLayouts || 1); 
@@ -66,6 +68,12 @@ const CreateNexusProjectModal = ({ onClose }) => {
         setFiles(files.filter((_, i) => i !== index));
     };
 
+    const handlePlanImageChange = (e) => {
+        if (e.target.files && e.target.files[0]) {
+            setPlanImageFile(e.target.files[0]);
+        }
+    };
+
     // --- Submit Handler ---
     const handleCreate = async () => {
         if (isLimitReached) {
@@ -76,39 +84,60 @@ const CreateNexusProjectModal = ({ onClose }) => {
 
         setIsLoading(true);
         try {
-            // Process Files
-            const processedDocs = await Promise.all(files.map(file => {
-                return new Promise((resolve) => {
-                    const reader = new FileReader();
-                    reader.onload = (e) => resolve({ name: file.name, url: e.target.result });
-                    reader.readAsDataURL(file);
-                });
-            }));
-
             // Smart Area String Combination
             let combinedTotalArea = '';
             if (formData.areaMeasurementType === 'Acres & Guntas') {
                 const acres = formData.areaAcres ? `${formData.areaAcres} Acres` : '';
                 const guntas = formData.areaGuntas ? `${formData.areaGuntas} Guntas` : '';
-                combinedTotalArea = [acres, guntas].filter(Boolean).join(' '); // Joins with a space, ignores empty
+                combinedTotalArea = [acres, guntas].filter(Boolean).join(' '); 
             } else {
                 combinedTotalArea = formData.areaValue ? `${formData.areaValue} ${formData.areaUnit}` : '';
             }
 
-            // Create Document
-            await addDoc(collection(db, activeCollection), {
+            // 1. Create Initial Document (to get the ID for storage paths)
+            const docRef = await addDoc(collection(db, activeCollection), {
                 ...formData,
-                totalArea: combinedTotalArea, // Save the combined readable string
+                totalArea: combinedTotalArea, 
                 devId: user.id, 
                 elements: [], 
-                docs: processedDocs,
+                docs: [], // will be updated after upload
+                backgroundImage: null, // will be updated after upload
                 createdAt: new Date().toISOString(),
                 publicMapVisible: true
             });
 
+            const storage = getStorage();
+            const updates = {};
+
+            // 2. Upload Layout Plan Image (if provided)
+            if (planImageFile) {
+                const safeName = planImageFile.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
+                const imageRef = ref(storage, `layouts/${docRef.id}/plan/${Date.now()}_${safeName}`);
+                await uploadBytes(imageRef, planImageFile);
+                const imageUrl = await getDownloadURL(imageRef);
+                updates.backgroundImage = imageUrl;
+            }
+
+            // 3. Upload General Documents
+            if (files.length > 0) {
+                const processedDocs = await Promise.all(files.map(async (file) => {
+                    const safeName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
+                    const fileRef = ref(storage, `layouts/${docRef.id}/docs/${Date.now()}_${safeName}`);
+                    await uploadBytes(fileRef, file);
+                    const fileUrl = await getDownloadURL(fileRef);
+                    return { name: file.name, url: fileUrl };
+                }));
+                updates.docs = processedDocs;
+            }
+
+            // 4. Finalize Document if we have uploads
+            if (Object.keys(updates).length > 0) {
+                await updateDoc(docRef, updates);
+            }
+
             onClose();
         } catch (e) {
-            console.error(e);
+            console.error("Error creating project:", e);
             alert("Error creating project: " + e.message);
         }
         setIsLoading(false);
@@ -205,7 +234,7 @@ const CreateNexusProjectModal = ({ onClose }) => {
                             </div>
                         </div>
 
-                        {/* --- NEW TOTAL SIZE UI --- */}
+                        {/* --- TOTAL SIZE UI --- */}
                         <div>
                             <div className="flex justify-between items-center mb-1">
                                 <label className="text-[10px] text-gray-500 uppercase font-bold block">Total Size</label>
@@ -297,8 +326,25 @@ const CreateNexusProjectModal = ({ onClose }) => {
                             </div>
                         </div>
 
+                        {/* --- NEW: LAYOUT PLAN UPLOAD --- */}
                         <div>
-                            <label className="text-[10px] text-gray-500 uppercase font-bold block mb-1">Project Documents</label>
+                            <label className="text-[10px] text-blue-400 uppercase font-bold block mb-1 flex items-center gap-1">
+                                <ImageIcon size={12}/> Interactive Map Blueprint
+                            </label>
+                            <div className="border border-blue-500/30 rounded-lg p-3 bg-blue-500/5 flex items-center justify-between">
+                                <span className="text-xs text-gray-300 truncate max-w-[200px]">
+                                    {planImageFile ? planImageFile.name : "Select layout image (JPG/PNG)"}
+                                </span>
+                                <label className="cursor-pointer bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded text-[10px] font-bold transition">
+                                    {planImageFile ? 'Change' : 'Browse'}
+                                    <input type="file" accept="image/*" className="hidden" onChange={handlePlanImageChange} />
+                                </label>
+                            </div>
+                        </div>
+
+                        {/* --- GENERAL DOCUMENTS UPLOAD --- */}
+                        <div>
+                            <label className="text-[10px] text-gray-500 uppercase font-bold block mb-1">Other Project Documents</label>
                             <div className="border border-dashed border-white/20 rounded-lg p-4 bg-white/5 flex flex-col items-center justify-center relative cursor-pointer hover:bg-white/10 transition group">
                                 <input type="file" multiple className="absolute inset-0 opacity-0 cursor-pointer z-10" onChange={handleFileChange} />
                                 <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center mb-2 group-hover:scale-110 transition">
@@ -312,7 +358,7 @@ const CreateNexusProjectModal = ({ onClose }) => {
                                     {files.map((f, i) => (
                                         <div key={i} className="flex justify-between items-center bg-white/5 p-2 rounded border border-white/5">
                                             <div className="flex items-center gap-2 overflow-hidden">
-                                                <FileText size={14} className="text-blue-400 flex-shrink-0" />
+                                                <FileText size={14} className="text-gray-400 flex-shrink-0" />
                                                 <span className="text-xs text-gray-300 truncate">{f.name}</span>
                                             </div>
                                             <button onClick={() => removeFile(i)} className="text-gray-500 hover:text-red-400 p-1">
@@ -329,7 +375,9 @@ const CreateNexusProjectModal = ({ onClose }) => {
                             disabled={isLoading} 
                             className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl text-xs mt-4 flex justify-center items-center gap-2 shadow-lg shadow-blue-900/20 transition disabled:opacity-50"
                         >
-                            {isLoading ? <Loader2 className="animate-spin" size={16} /> : "Create Project"}
+                            {isLoading ? (
+                                <><Loader2 className="animate-spin" size={16} /> Creating & Uploading...</>
+                            ) : "Create Project"}
                         </button>
                     </div>
                 )}

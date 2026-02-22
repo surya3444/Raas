@@ -158,6 +158,9 @@ const MapCanvas = ({
         if (tool === 'pen') finishDrawing();
     };
 
+    // Grab the image URL correctly (handles both possible names just in case)
+    const mapImageUrl = layout?.backgroundImage || layout?.bgImage;
+
     return (
         <div 
             ref={containerRef}
@@ -168,7 +171,13 @@ const MapCanvas = ({
             onDoubleClick={handleDoubleClick}
         >
             <div style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})`, transformOrigin: '0 0', transition: isDragging ? 'none' : 'transform 0.1s ease-out' }} className="absolute top-0 left-0">
-                {layout?.bgImage ? <img src={layout.bgImage} className="pointer-events-none" style={{ maxWidth: 'none' }} alt="Blueprint" /> : <div className="w-[3000px] h-[3000px] bg-white/5 border border-white/10 flex items-center justify-center text-gray-700 font-bold text-4xl">NO BLUEPRINT</div>}
+                
+                {/* --- CRITICAL FIX: Use mapImageUrl which checks for 'backgroundImage' --- */}
+                {mapImageUrl ? (
+                    <img src={mapImageUrl} className="pointer-events-none" style={{ maxWidth: 'none' }} alt="Blueprint" /> 
+                ) : (
+                    <div className="w-[3000px] h-[3000px] bg-white/5 border border-white/10 flex items-center justify-center text-gray-700 font-bold text-4xl">NO BLUEPRINT</div>
+                )}
 
                 <svg ref={svgRef} className="absolute top-0 left-0 w-full h-full overflow-visible" width="100%" height="100%">
                     
