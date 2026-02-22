@@ -6,8 +6,12 @@ import { useNexus } from '../../context/NexusContext';
 import NexusStats from '../../components/nexus/dashboard/NexusStats';
 import NexusCharts from '../../components/nexus/dashboard/NexusCharts';
 import NexusNavbar from '../../components/nexus/NexusNavbar';
-import { ShieldAlert, Plus, Layout, Loader2, FolderOpen, ArrowRight, MoreVertical, Trash2, Edit2 } from 'lucide-react';
+// Added Users for the Manage Team button
+import { ShieldAlert, Plus, Layout, Loader2, FolderOpen, ArrowRight, MoreVertical, Trash2, Edit2, UserPlus, Users } from 'lucide-react';
 import CreateNexusProjectModal from '../../components/nexus/modals/CreateNexusProjectModal';
+import CreateManagerModal from '../../components/nexus/modals/CreateManagerModal';
+// Import the new Manage Managers Modal (You will need to create this file)
+import ManageManagersModal from '../../components/nexus/modals/ManageManagersModal';
 
 const NexusDashboard = () => {
     const { user, activeCollection, triggerPanic } = useNexus();
@@ -15,6 +19,8 @@ const NexusDashboard = () => {
     const [layouts, setLayouts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [isCreateModalOpen, setCreateModalOpen] = useState(false);
+    const [isManagerModalOpen, setManagerModalOpen] = useState(false);
+    const [isManageManagersModalOpen, setManageManagersModalOpen] = useState(false); // New state for editing managers
     const [activeMenuId, setActiveMenuId] = useState(null);
 
     useEffect(() => {
@@ -23,9 +29,17 @@ const NexusDashboard = () => {
             return;
         }
 
-        const q = query(collection(db, activeCollection), where("devId", "==", user.id));
+        const targetDevId = user.role === 'manager' ? user.parentId : user.id;
+
+        const q = query(collection(db, activeCollection), where("devId", "==", targetDevId));
         const unsub = onSnapshot(q, (snap) => {
-            const fetched = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            let fetched = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            
+            if (user.role === 'manager') {
+                const assigned = user.assignedLayouts || [];
+                fetched = fetched.filter(layout => assigned.includes(layout.id));
+            }
+
             setLayouts(fetched);
             setLoading(false);
         });
@@ -65,6 +79,7 @@ const NexusDashboard = () => {
     };
 
     const totalPlotsUsed = layouts.reduce((sum, l) => sum + (l.elements?.length || 0), 0);
+    const isManager = user?.role === 'manager'; // Helper variable
 
     return (
         <div className="flex flex-col h-screen w-screen bg-[#050505] relative overflow-hidden">
@@ -85,18 +100,45 @@ const NexusDashboard = () => {
                 {/* Header Actions */}
                 <div className="flex justify-between items-end border-b border-white/5 pb-6">
                     <div>
-                        <h2 className="text-3xl font-bold text-white tracking-tight">Overview</h2>
-                        <p className="text-sm text-gray-400 mt-1">Manage layouts & track sales</p>
+                        <h2 className="text-3xl font-bold text-white tracking-tight flex items-center gap-3">
+                            Overview
+                            {isManager && (
+                                <span className="bg-blue-600/20 text-blue-400 px-3 py-1 rounded-full text-[10px] uppercase tracking-wider font-bold">
+                                    Manager
+                                </span>
+                            )}
+                        </h2>
+                        <p className="text-sm text-gray-400 mt-1">
+                            {isManager 
+                                ? `Managing assigned projects for ${user.parentName}` 
+                                : 'Manage layouts & track sales'}
+                        </p>
                     </div>
-                    <div className="flex gap-2">
-                        
-                        <button 
-                            onClick={() => setCreateModalOpen(true)} 
-                            className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl font-bold text-xs flex items-center gap-2 shadow-lg shadow-blue-500/20 transition transform hover:scale-105"
-                        >
-                            <Plus size={16} /> Create Project
-                        </button>
-                    </div>
+                    
+                    {/* HIDE ACTION BUTTONS FROM MANAGERS */}
+                    {!isManager && (
+                        <div className="flex gap-3">
+                            {/* Manage Team Button */}
+                            <button 
+                                onClick={() => setManageManagersModalOpen(true)} 
+                                className="bg-white/5 hover:bg-white/10 border border-white/10 text-white px-5 py-3 rounded-xl font-bold text-xs flex items-center gap-2 transition"
+                            >
+                                <Users size={16} /> Manage Team
+                            </button>
+                            <button 
+                                onClick={() => setManagerModalOpen(true)} 
+                                className="bg-white/5 hover:bg-white/10 border border-white/10 text-white px-5 py-3 rounded-xl font-bold text-xs flex items-center gap-2 transition"
+                            >
+                                <UserPlus size={16} /> Add Manager
+                            </button>
+                            <button 
+                                onClick={() => setCreateModalOpen(true)} 
+                                className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl font-bold text-xs flex items-center gap-2 shadow-lg shadow-blue-500/20 transition transform hover:scale-105"
+                            >
+                                <Plus size={16} /> Create Project
+                            </button>
+                        </div>
+                    )}
                 </div>
 
                 {loading ? (
@@ -105,7 +147,8 @@ const NexusDashboard = () => {
                     </div>
                 ) : (
                     <>
-                        <NexusStats layouts={layouts} />
+                        {/* Passed isManager flag to hide plan usage inside the component */}
+                        <NexusStats layouts={layouts} isManager={isManager} />
                         
                         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
                             <div className="lg:col-span-3">
@@ -114,7 +157,9 @@ const NexusDashboard = () => {
                                     <div className="glass-panel p-10 flex flex-col items-center justify-center text-gray-500 border-dashed border-2 border-white/10">
                                         <FolderOpen size={48} className="mb-4 opacity-50" />
                                         <p className="text-sm">No projects found.</p>
-                                        <button onClick={() => setCreateModalOpen(true)} className="mt-4 text-blue-500 hover:underline text-xs font-bold">Create your first layout</button>
+                                        {!isManager && (
+                                            <button onClick={() => setCreateModalOpen(true)} className="mt-4 text-blue-500 hover:underline text-xs font-bold">Create your first layout</button>
+                                        )}
                                     </div>
                                 ) : (
                                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
@@ -128,7 +173,6 @@ const NexusDashboard = () => {
                                             return (
                                                 <div 
                                                     key={l.id} 
-                                                    // FIX: Updated route to 'view' instead of 'editor'
                                                     onClick={() => navigate(`/nexus/view/${l.id}`)} 
                                                     className="relative group cursor-pointer overflow-visible rounded-2xl border border-white/5 transition-all duration-300 hover:scale-[1.02] hover:shadow-[0_0_30px_rgba(59,130,246,0.15)]"
                                                     style={{
@@ -136,34 +180,37 @@ const NexusDashboard = () => {
                                                         backdropFilter: 'blur(10px)'
                                                     }}
                                                 >
-                                                    <div className="absolute top-3 right-3 z-30">
-                                                        <button 
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                setActiveMenuId(activeMenuId === l.id ? null : l.id);
-                                                            }}
-                                                            className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition"
-                                                        >
-                                                            <MoreVertical size={16} />
-                                                        </button>
+                                                    {/* Hide Rename/Delete menu from managers */}
+                                                    {!isManager && (
+                                                        <div className="absolute top-3 right-3 z-30">
+                                                            <button 
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setActiveMenuId(activeMenuId === l.id ? null : l.id);
+                                                                }}
+                                                                className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition"
+                                                            >
+                                                                <MoreVertical size={16} />
+                                                            </button>
 
-                                                        {activeMenuId === l.id && (
-                                                            <div className="absolute right-0 mt-1 w-32 bg-[#18181b] border border-white/10 rounded-lg shadow-xl z-40 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-                                                                <button 
-                                                                    onClick={(e) => handleRename(e, l.id, l.name)}
-                                                                    className="w-full text-left px-3 py-2 text-[10px] font-bold text-gray-300 hover:bg-blue-600 hover:text-white flex items-center gap-2 transition"
-                                                                >
-                                                                    <Edit2 size={12} /> Rename
-                                                                </button>
-                                                                <button 
-                                                                    onClick={(e) => handleDelete(e, l.id)}
-                                                                    className="w-full text-left px-3 py-2 text-[10px] font-bold text-red-400 hover:bg-red-900/30 flex items-center gap-2 transition"
-                                                                >
-                                                                    <Trash2 size={12} /> Delete
-                                                                </button>
-                                                            </div>
-                                                        )}
-                                                    </div>
+                                                            {activeMenuId === l.id && (
+                                                                <div className="absolute right-0 mt-1 w-32 bg-[#18181b] border border-white/10 rounded-lg shadow-xl z-40 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                                                                    <button 
+                                                                        onClick={(e) => handleRename(e, l.id, l.name)}
+                                                                        className="w-full text-left px-3 py-2 text-[10px] font-bold text-gray-300 hover:bg-blue-600 hover:text-white flex items-center gap-2 transition"
+                                                                    >
+                                                                        <Edit2 size={12} /> Rename
+                                                                    </button>
+                                                                    <button 
+                                                                        onClick={(e) => handleDelete(e, l.id)}
+                                                                        className="w-full text-left px-3 py-2 text-[10px] font-bold text-red-400 hover:bg-red-900/30 flex items-center gap-2 transition"
+                                                                    >
+                                                                        <Trash2 size={12} /> Delete
+                                                                    </button>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )}
 
                                                     <div className="absolute inset-0 bg-gradient-to-br from-blue-600/10 to-transparent opacity-0 group-hover:opacity-100 transition duration-500 pointer-events-none rounded-2xl"></div>
                                                     <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-blue-600 to-transparent opacity-50 group-hover:opacity-100 rounded-t-2xl"></div>
@@ -218,16 +265,32 @@ const NexusDashboard = () => {
                                 )}
                             </div>
                             <div className="lg:col-span-1">
-                                <NexusCharts layouts={layouts} />
+                                {/* Passed isManager flag here as well */}
+                                <NexusCharts layouts={layouts} isManager={isManager} />
                             </div>
                         </div>
                     </>
                 )}
             </div>
 
+            {/* Modals */}
             {isCreateModalOpen && user && (
                 <CreateNexusProjectModal 
                     onClose={() => setCreateModalOpen(false)}
+                />
+            )}
+
+            {isManagerModalOpen && user && (
+                <CreateManagerModal 
+                    developer={user} 
+                    onClose={() => setManagerModalOpen(false)} 
+                />
+            )}
+
+            {isManageManagersModalOpen && user && (
+                <ManageManagersModal 
+                    developer={user} 
+                    onClose={() => setManageManagersModalOpen(false)} 
                 />
             )}
         </div>

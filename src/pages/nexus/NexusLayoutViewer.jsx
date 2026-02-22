@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { doc, onSnapshot, updateDoc } from "firebase/firestore";
 import { db } from '../../firebase';
@@ -28,7 +28,7 @@ import {
     Unlock, Clock, CheckCircle 
 } from 'lucide-react';
 
-// --- STATS CARD COMPONENT (Moved Outside to prevent crashes) ---
+// --- STATS CARD COMPONENT ---
 const StatsCard = ({ title, value, sub, icon: Icon, color, action, onEdit, isPublicMode }) => {
     const colorClasses = {
         green: "text-emerald-400 group-hover:border-emerald-500/30 group-hover:shadow-emerald-500/10",
@@ -95,7 +95,7 @@ const NexusLayoutViewer = () => {
 
     const [activeModal, setActiveModal] = useState(null); 
     const [sharePlot, setSharePlot] = useState(null); 
-    const [mobileTab, setMobileTab] = useState('map'); 
+    const [mobileTab, setMobileTab] = useState('dashboard'); // Default to dashboard
 
     useEffect(() => {
         const unsub = onSnapshot(doc(db, activeCollection, id), (docSnap) => {
@@ -142,6 +142,15 @@ const NexusLayoutViewer = () => {
         }
     }, [searchParams, layout]);
 
+    // --- CRITICAL FIX: Memoize grid layout object to prevent infinite re-render loops in child components ---
+    const memoizedGridLayout = useMemo(() => {
+        if (!layout) return null;
+        return {
+            ...layout,
+            elements: (layout.elements || []).filter(e => e.type === 'plot')
+        };
+    }, [layout]);
+
     // --- ACTIONS ---
     const exitPreviewMode = () => {
         setIsPublicMode(false);
@@ -182,11 +191,9 @@ const NexusLayoutViewer = () => {
         let areaStr = layout.totalArea.toString().toLowerCase();
         if (areaStr.includes('acre')) return layout.totalArea;
         
-        // Extract number
         const rawVal = parseFloat(areaStr.replace(/[^0-9.]/g, ''));
         if (!rawVal) return layout.totalArea;
 
-        // Convert (1 Acre = 43560 Sq.ft)
         const acres = rawVal / 43560;
         return `${acres.toFixed(2)} Acres`;
     };
@@ -258,8 +265,9 @@ const NexusLayoutViewer = () => {
         .filter(e => e.status === 'sold' || e.status === 'booked')
         .filter(e => (e.customerName?.toLowerCase() || '').includes(searchTerm.toLowerCase()) || e.id.toLowerCase().includes(searchTerm.toLowerCase()));
 
-    const DashboardSection = () => (
-        <div className="flex flex-col p-4 md:p-8 space-y-8 pb-32 md:pb-8 bg-gradient-to-b from-[#09090b] via-[#050505] to-black">
+    // CRITICAL FIX: Converted from Component to regular function rendering to stop React unmount/remounting
+    const renderDashboardSection = () => (
+        <div className="flex flex-col p-4 md:p-8 space-y-8 bg-gradient-to-b from-[#09090b] via-[#050505] to-black">
             
             {/* Header */}
             <div className="relative rounded-3xl border border-white/[0.08] bg-white/[0.02] p-6 backdrop-blur-2xl shadow-2xl flex flex-col md:flex-row justify-between md:items-center gap-6 overflow-hidden group">
@@ -313,7 +321,8 @@ const NexusLayoutViewer = () => {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <StatsCard title="Revenue" value={`₹${(revenue/100000).toFixed(2)}L`} sub="Sold + Booking Amts" icon={DollarSign} color="green" isPublicMode={isPublicMode} />
                 <StatsCard title="Project Value" value={`₹${(totalValue/10000000).toFixed(2)}Cr`} sub="Potential Worth" icon={TrendingUp} color="amber" isPublicMode={isPublicMode} />
-                
+                <StatsCard title="Balance Value" value={`₹${((totalValue - revenue)/10000000).toFixed(2)}Cr`} sub="Potential Worth" icon={TrendingUp} color="amber" isPublicMode={isPublicMode} />
+
                 {/* Expenses Card */}
                 {layout.costPerSqft ? (
                     <StatsCard 
@@ -425,11 +434,16 @@ const NexusLayoutViewer = () => {
                     {/* --- LEFT COLUMN --- */}
                     <div className="flex-1 flex flex-col min-w-0 bg-transparent relative overflow-y-auto custom-scrollbar scroll-smooth transition-all duration-300">
                         
-                        {/* A. MAP/GRID VIEW */}
+                        {/* A. DASHBOARD VIEW (TOP) */}
+                        <div className={`flex-col ${mobileTab === 'dashboard' ? 'flex-1' : 'hidden'} ${(!isFullScreen && mobileTab !== 'dashboard') ? 'md:flex' : ''} ${isFullScreen ? 'md:hidden' : ''} `}>
+                             {renderDashboardSection()}
+                        </div>
+
+                        {/* B. MAP/GRID VIEW (BOTTOM) */}
                         <div className={`
                             relative flex-col 
                             ${mobileTab === 'map' ? 'flex h-full' : 'hidden md:flex'} 
-                            ${isFullScreen ? 'h-full flex-1 p-0' : 'md:h-[65vh] md:shrink-0 md:p-4'} 
+                            ${isFullScreen ? 'h-full flex-1 p-0' : 'md:h-[65vh] md:shrink-0 md:p-4 md:mb-8'} 
                         `}>
                             {/* Map Container */}
                             <div className={`
@@ -467,20 +481,10 @@ const NexusLayoutViewer = () => {
                                     />
                                 ) : (
                                     <div className="h-full w-full overflow-y-auto custom-scrollbar p-6 bg-[#0e0e10]">
-                                        <InteractiveGrid 
-                                            layout={{
-                                                ...layout,
-                                                elements: (layout.elements || []).filter(e => e.type === 'plot')
-                                            }} 
-                                        />
+                                        <InteractiveGrid layout={memoizedGridLayout} />
                                     </div>
                                 )}
                             </div>
-                        </div>
-
-                        {/* B. DASHBOARD VIEW */}
-                        <div className={`flex-col ${mobileTab === 'dashboard' ? 'flex-1' : 'hidden'} ${(!isFullScreen && mobileTab !== 'dashboard') ? 'md:flex' : ''} ${isFullScreen ? 'md:hidden' : ''} `}>
-                             <DashboardSection />
                         </div>
 
                         {/* C. REGISTRY VIEW (Mobile Only) */}
@@ -566,8 +570,8 @@ const NexusLayoutViewer = () => {
                 </div>
                 
                 <div className="md:hidden h-20 bg-[#121214] border-t border-white/10 flex justify-around items-center px-4 shrink-0 z-50 fixed bottom-0 w-full pb-4">
-                    <button onClick={() => setMobileTab('map')} className={`flex flex-col items-center gap-1.5 p-2 rounded-xl transition w-16 ${mobileTab === 'map' ? 'text-blue-500 bg-blue-500/10' : 'text-gray-500'}`}><MapIcon size={22}/><span className="text-[10px] font-bold">Map</span></button>
                     {!isPublicMode && <button onClick={() => setMobileTab('dashboard')} className={`flex flex-col items-center gap-1.5 p-2 rounded-xl transition w-16 ${mobileTab === 'dashboard' ? 'text-blue-500 bg-blue-500/10' : 'text-gray-500'}`}><BarChart3 size={22}/><span className="text-[10px] font-bold">Dash</span></button>}
+                    <button onClick={() => setMobileTab('map')} className={`flex flex-col items-center gap-1.5 p-2 rounded-xl transition w-16 ${mobileTab === 'map' ? 'text-blue-500 bg-blue-500/10' : 'text-gray-500'}`}><MapIcon size={22}/><span className="text-[10px] font-bold">Map</span></button>
                     <button onClick={() => setMobileTab('registry')} className={`flex flex-col items-center gap-1.5 p-2 rounded-xl transition w-16 ${mobileTab === 'registry' ? 'text-blue-500 bg-blue-500/10' : 'text-gray-500'}`}><Users size={22}/><span className="text-[10px] font-bold">{isPublicMode ? 'Details' : 'List'}</span></button>
                 </div>
 

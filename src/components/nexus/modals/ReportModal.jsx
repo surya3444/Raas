@@ -47,6 +47,9 @@ const ReportModal = ({ layout, onClose }) => {
         return acc;
     }, { totalValue: 0, realizedRevenue: 0, collectedBooking: 0, soldCount: 0, bookedCount: 0, openCount: 0 });
 
+    // Calculate Balance
+    const balanceAmount = stats.totalValue - stats.realizedRevenue;
+
     // 3. Handle Print
     const handlePrint = () => {
         const printContent = printRef.current.innerHTML;
@@ -109,7 +112,7 @@ const ReportModal = ({ layout, onClose }) => {
                 <div className="flex-1 overflow-y-auto p-10 bg-white text-black font-sans" ref={printRef}>
                     
                     {/* BRANDING HEADER */}
-                    <div className="flex justify-between items-center mb-10 pb-6 border-b-2 border-black">
+                    <div className="flex justify-between items-center mb-8 pb-6 border-b-2 border-black">
                         <div>
                             {/* FALLBACK TITLE IF IMAGE FAILS */}
                             <div className="flex flex-col">
@@ -128,38 +131,58 @@ const ReportModal = ({ layout, onClose }) => {
                         <div className="text-right w-80">
                             <h2 className="text-xl font-bold text-gray-800">{layout.name}</h2>
                             <p className="text-sm text-gray-600 flex items-center justify-end gap-1 mt-1"><MapPin size={12}/> {layout.address || "Location"}</p>
+                            <p className="text-xs text-gray-500 mt-1">Date: {new Date().toLocaleDateString()}</p>
                         </div>
                     </div>
 
-                    {/* META DATA */}
-                    <div className="flex justify-between items-end mb-8">
-                        <div>
-                            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Report Details</p>
-                            <p className="text-sm font-semibold text-gray-700">Generated: {new Date().toLocaleDateString()}</p>
+                    {/* --- SINGLE CONSOLIDATED SUMMARY CARD --- */}
+                    <div className="mb-10 bg-gray-50 border border-gray-200 rounded-xl overflow-hidden">
+                        <div className="bg-gray-100 px-6 py-3 border-b border-gray-200 flex justify-between items-center">
+                            <h3 className="font-bold text-gray-800 uppercase tracking-wide text-sm">Project Summary Dashboard</h3>
+                            <span className="text-xs font-semibold text-gray-500">Total Plots: {plots.length} | Area: {layout.totalArea || "N/A"}</span>
                         </div>
-                        <div className="text-right">
-                            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Summary</p>
-                            <p className="text-sm font-semibold text-gray-700">Total Plots: {plots.length} | Area: {layout.totalArea || "N/A"}</p>
-                        </div>
-                    </div>
+                        
+                        <div className="p-6">
+                            {/* Top Row: Core Financials */}
+                            <div className="grid grid-cols-3 gap-6 mb-6 pb-6 border-b border-gray-200">
+                                <div>
+                                    <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">Total Project Value</p>
+                                    <p className="text-3xl font-black text-blue-900">{formatCurrency(stats.totalValue)}</p>
+                                </div>
+                                <div className="border-l border-gray-200 pl-6">
+                                    <p className="text-[11px] font-bold text-green-600 uppercase tracking-wider mb-1">Total Collected</p>
+                                    <p className="text-3xl font-black text-green-700">{formatCurrency(stats.realizedRevenue)}</p>
+                                </div>
+                                <div className="border-l border-gray-200 pl-6">
+                                    <p className="text-[11px] font-bold text-orange-600 uppercase tracking-wider mb-1">Balance Amount</p>
+                                    <p className="text-3xl font-black text-orange-600">{formatCurrency(balanceAmount)}</p>
+                                </div>
+                            </div>
 
-                    {/* FINANCIAL CARDS */}
-                    <div className="grid grid-cols-4 gap-4 mb-8">
-                        <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
-                            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Project Value</p>
-                            <p className="text-xl font-black text-black mt-1">{formatCurrency(stats.totalValue)}</p>
-                        </div>
-                        <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                            <p className="text-[10px] font-bold text-green-700 uppercase tracking-wider">Collected</p>
-                            <p className="text-xl font-black text-green-800 mt-1">{formatCurrency(stats.realizedRevenue)}</p>
-                        </div>
-                        <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                            <p className="text-[10px] font-bold text-blue-700 uppercase tracking-wider">Sold</p>
-                            <p className="text-xl font-black text-blue-800 mt-1">{stats.soldCount}</p>
-                        </div>
-                        <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                            <p className="text-[10px] font-bold text-yellow-700 uppercase tracking-wider">Booked</p>
-                            <p className="text-xl font-black text-yellow-800 mt-1">{stats.bookedCount}</p>
+                            {/* Bottom Row: Inventory Stats */}
+                            <div className="flex gap-12">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                                    <div>
+                                        <p className="text-xl font-bold text-gray-800">{stats.soldCount}</p>
+                                        <p className="text-[10px] uppercase text-gray-500 font-bold">Sold Plots</p>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+                                    <div>
+                                        <p className="text-xl font-bold text-gray-800">{stats.bookedCount}</p>
+                                        <p className="text-[10px] uppercase text-gray-500 font-bold">Booked Plots</p>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <div className="w-3 h-3 rounded-full bg-gray-400"></div>
+                                    <div>
+                                        <p className="text-xl font-bold text-gray-800">{stats.openCount}</p>
+                                        <p className="text-[10px] uppercase text-gray-500 font-bold">Open Plots</p>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { addDoc, collection, query, where, getDocs } from "firebase/firestore";
 import { db } from '../../../firebase'; 
-import { X, Loader2, MapPin, Tag, Link as LinkIcon, Upload, FileText, Trash2, Ruler, Lock, AlertTriangle } from 'lucide-react';
+import { X, Loader2, MapPin, Tag, Link as LinkIcon, Upload, FileText, Trash2, Ruler, Lock, AlertTriangle, Calendar } from 'lucide-react';
 import { useNexus } from '../../../context/NexusContext';
 
 const CreateNexusProjectModal = ({ onClose }) => {
@@ -13,18 +13,23 @@ const CreateNexusProjectModal = ({ onClose }) => {
     const [isCheckingLimits, setIsCheckingLimits] = useState(true);
     const [currentCount, setCurrentCount] = useState(0);
     
+    // Updated formData with specific Acres/Guntas support
     const [formData, setFormData] = useState({ 
         name: '', 
         address: '',
         addressLink: '',
         prefix: 'P-',
-        totalArea: '' 
+        areaMeasurementType: 'Acres & Guntas', // Toggle between composite and single
+        areaAcres: '',
+        areaGuntas: '',
+        areaValue: '', 
+        areaUnit: 'Sq.Ft.',
+        launchDate: '' 
     });
     
     const [files, setFiles] = useState([]);
 
     // --- 1. DEFINE LIMITS ---
-    // Safely get limits, defaulting to 1 if plan data is missing
     const maxLayouts = Number(user?.limits?.maxLayouts || 1); 
 
     // --- 2. SELF-CHECK: COUNT EXISTING PROJECTS ---
@@ -33,7 +38,6 @@ const CreateNexusProjectModal = ({ onClose }) => {
             if (!user?.id) return;
             setIsCheckingLimits(true);
             try {
-                // Query database for REAL count of projects owned by this user
                 const q = query(
                     collection(db, activeCollection), 
                     where("devId", "==", user.id)
@@ -49,7 +53,6 @@ const CreateNexusProjectModal = ({ onClose }) => {
         verifyLimits();
     }, [user, activeCollection]);
 
-    // Check if limit reached based on the FETCHED count
     const isLimitReached = currentCount >= maxLayouts;
 
     // --- File Handlers ---
@@ -65,7 +68,6 @@ const CreateNexusProjectModal = ({ onClose }) => {
 
     // --- Submit Handler ---
     const handleCreate = async () => {
-        // Double check limit before submission
         if (isLimitReached) {
             return alert(`Plan Limit Reached: You have ${currentCount}/${maxLayouts} projects.`);
         }
@@ -83,9 +85,20 @@ const CreateNexusProjectModal = ({ onClose }) => {
                 });
             }));
 
+            // Smart Area String Combination
+            let combinedTotalArea = '';
+            if (formData.areaMeasurementType === 'Acres & Guntas') {
+                const acres = formData.areaAcres ? `${formData.areaAcres} Acres` : '';
+                const guntas = formData.areaGuntas ? `${formData.areaGuntas} Guntas` : '';
+                combinedTotalArea = [acres, guntas].filter(Boolean).join(' '); // Joins with a space, ignores empty
+            } else {
+                combinedTotalArea = formData.areaValue ? `${formData.areaValue} ${formData.areaUnit}` : '';
+            }
+
             // Create Document
             await addDoc(collection(db, activeCollection), {
                 ...formData,
+                totalArea: combinedTotalArea, // Save the combined readable string
                 devId: user.id, 
                 elements: [], 
                 docs: processedDocs,
@@ -106,18 +119,16 @@ const CreateNexusProjectModal = ({ onClose }) => {
             <div className="glass-panel w-full max-w-lg p-6 bg-[#121214] border border-white/10 shadow-2xl relative max-h-[90vh] overflow-y-auto custom-scrollbar rounded-2xl">
                 
                 {/* Header */}
-                <div className="flex justify-between items-start mb-6">
+                <div className="flex justify-between items-start mb-6 shrink-0">
                     <div>
                         <h2 className="text-lg font-bold text-white flex items-center gap-2">
                             Initialize Nexus Project
-                            {/* Visual Badge */}
                             {!isCheckingLimits && isLimitReached && (
                                 <span className="text-[10px] bg-red-500/10 text-red-500 border border-red-500/20 px-2 py-0.5 rounded uppercase tracking-wider flex items-center gap-1">
                                     <Lock size={10}/> Limit Reached
                                 </span>
                             )}
                         </h2>
-                        {/* Status Text */}
                         <p className="text-[10px] text-gray-500 mt-1 flex items-center gap-2">
                             {isCheckingLimits ? (
                                 <span className="flex items-center gap-1 text-blue-400"><Loader2 size={10} className="animate-spin"/> Verifying plan limits...</span>
@@ -133,13 +144,11 @@ const CreateNexusProjectModal = ({ onClose }) => {
 
                 {/* --- CONTENT SWITCHER --- */}
                 {isCheckingLimits ? (
-                    // 1. LOADING STATE
                     <div className="py-20 flex flex-col items-center justify-center text-gray-500 gap-3">
                         <Loader2 size={32} className="animate-spin text-blue-500"/>
                         <p className="text-xs">Checking account capacity...</p>
                     </div>
                 ) : isLimitReached ? (
-                    // 2. BLOCKED STATE
                     <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-6 text-center space-y-4 my-4 animate-in zoom-in-95">
                         <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto text-red-500 shadow-[0_0_20px_rgba(239,68,68,0.2)]">
                             <Lock size={28}/>
@@ -156,8 +165,7 @@ const CreateNexusProjectModal = ({ onClose }) => {
                         </button>
                     </div>
                 ) : (
-                    // 3. CREATE FORM
-                    <div className="space-y-4">
+                    <div className="space-y-4 pb-2">
                         <div>
                             <label className="text-[10px] text-gray-500 uppercase font-bold block mb-1">Project Name *</label>
                             <input 
@@ -183,17 +191,84 @@ const CreateNexusProjectModal = ({ onClose }) => {
                                 </div>
                             </div>
                             <div>
-                                <label className="text-[10px] text-gray-500 uppercase font-bold block mb-1">Total Size</label>
+                                <label className="text-[10px] text-gray-500 uppercase font-bold block mb-1">Launch Date</label>
                                 <div className="relative">
-                                    <Ruler className="absolute left-3 top-3 text-gray-500" size={16} />
+                                    <Calendar className="absolute left-3 top-3 text-gray-500" size={16} />
                                     <input 
-                                        className="w-full bg-black/40 border border-white/10 rounded-lg py-2.5 pl-9 pr-3 text-sm text-white focus:border-blue-500 outline-none placeholder:text-gray-700 transition"
-                                        placeholder="e.g. 5 Acres"
-                                        value={formData.totalArea}
-                                        onChange={e => setFormData({...formData, totalArea: e.target.value})}
+                                        type="date"
+                                        className="w-full bg-black/40 border border-white/10 rounded-lg py-2.5 pl-9 pr-3 text-sm text-white focus:border-blue-500 outline-none transition"
+                                        value={formData.launchDate}
+                                        onChange={e => setFormData({...formData, launchDate: e.target.value})}
+                                        style={{ colorScheme: 'dark' }} 
                                     />
                                 </div>
                             </div>
+                        </div>
+
+                        {/* --- NEW TOTAL SIZE UI --- */}
+                        <div>
+                            <div className="flex justify-between items-center mb-1">
+                                <label className="text-[10px] text-gray-500 uppercase font-bold block">Total Size</label>
+                                <select 
+                                    className="bg-transparent text-[10px] font-bold uppercase text-blue-400 outline-none cursor-pointer"
+                                    value={formData.areaMeasurementType}
+                                    onChange={e => setFormData({...formData, areaMeasurementType: e.target.value})}
+                                >
+                                    <option className="bg-[#121214]" value="Acres & Guntas">Acres & Guntas</option>
+                                    <option className="bg-[#121214]" value="Single Unit">Other Units</option>
+                                </select>
+                            </div>
+
+                            {formData.areaMeasurementType === 'Acres & Guntas' ? (
+                                <div className="grid grid-cols-2 gap-2">
+                                    <div className="flex bg-black/40 border border-white/10 rounded-lg overflow-hidden focus-within:border-blue-500 transition">
+                                        <input 
+                                            type="number" 
+                                            className="w-full bg-transparent py-2.5 px-3 text-sm text-white outline-none placeholder:text-gray-700"
+                                            placeholder="Acres"
+                                            value={formData.areaAcres}
+                                            onChange={e => setFormData({...formData, areaAcres: e.target.value})}
+                                        />
+                                        <div className="border-l border-white/10 flex items-center bg-black/20 px-3 text-xs text-gray-400">
+                                            Acres
+                                        </div>
+                                    </div>
+                                    <div className="flex bg-black/40 border border-white/10 rounded-lg overflow-hidden focus-within:border-blue-500 transition">
+                                        <input 
+                                            type="number" 
+                                            className="w-full bg-transparent py-2.5 px-3 text-sm text-white outline-none placeholder:text-gray-700"
+                                            placeholder="Guntas"
+                                            value={formData.areaGuntas}
+                                            onChange={e => setFormData({...formData, areaGuntas: e.target.value})}
+                                        />
+                                        <div className="border-l border-white/10 flex items-center bg-black/20 px-3 text-xs text-gray-400">
+                                            Guntas
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="flex bg-black/40 border border-white/10 rounded-lg overflow-hidden focus-within:border-blue-500 transition">
+                                    <input 
+                                        type="number"
+                                        className="w-full bg-transparent py-2.5 px-3 text-sm text-white outline-none placeholder:text-gray-700"
+                                        placeholder="Value"
+                                        value={formData.areaValue}
+                                        onChange={e => setFormData({...formData, areaValue: e.target.value})}
+                                    />
+                                    <div className="border-l border-white/10 flex items-center bg-black/20 pr-2">
+                                        <select 
+                                            className="bg-transparent text-sm text-gray-300 py-2.5 px-2 outline-none cursor-pointer hover:text-white"
+                                            value={formData.areaUnit}
+                                            onChange={e => setFormData({...formData, areaUnit: e.target.value})}
+                                        >
+                                            <option className="bg-[#121214]" value="Sq.Ft.">Sq.Ft.</option>
+                                            <option className="bg-[#121214]" value="Sq.Yards">Sq.Yards</option>
+                                            <option className="bg-[#121214]" value="Hectares">Hectares</option>
+                                            <option className="bg-[#121214]" value="Acres">Acres Only</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         <div>
@@ -215,7 +290,7 @@ const CreateNexusProjectModal = ({ onClose }) => {
                                 <LinkIcon className="absolute left-3 top-3 text-gray-500" size={16} />
                                 <input 
                                     className="w-full bg-black/40 border border-white/10 rounded-lg py-2.5 pl-9 pr-3 text-sm text-blue-400 focus:border-blue-500 outline-none placeholder:text-gray-700 transition"
-                                    placeholder="http://googleusercontent.com/maps..."
+                                    placeholder="https://maps.google.com/..."
                                     value={formData.addressLink}
                                     onChange={e => setFormData({...formData, addressLink: e.target.value})}
                                 />

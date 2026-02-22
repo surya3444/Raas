@@ -2,7 +2,7 @@ import React from 'react';
 import { IndianRupee, Layers, CheckCircle, Clock, Lock, BarChart3, PieChart, TrendingUp } from 'lucide-react';
 import { useNexus } from '../../../context/NexusContext';
 
-const NexusStats = ({ layouts }) => {
+const NexusStats = ({ layouts, isManager }) => {
     const { user } = useNexus();
     const limits = user?.limits || {};
 
@@ -45,6 +45,25 @@ const NexusStats = ({ layouts }) => {
         return `₹ ${n.toLocaleString('en-IN')}`;
     };
 
+    // Safely format the expiry date from Firestore Timestamp or string
+    let expiryDateStr = "N/A";
+    if (user?.subscriptionEnd) {
+        let dateObj;
+        if (typeof user.subscriptionEnd.toDate === 'function') {
+            dateObj = user.subscriptionEnd.toDate();
+        } else if (user.subscriptionEnd.seconds) {
+            dateObj = new Date(user.subscriptionEnd.seconds * 1000);
+        } else {
+            dateObj = new Date(user.subscriptionEnd);
+        }
+        
+        if (!isNaN(dateObj)) {
+            expiryDateStr = dateObj.toLocaleDateString('en-IN', {
+                day: 'numeric', month: 'short', year: 'numeric'
+            });
+        }
+    }
+
     const Card = ({ title, value, sub, icon: Icon, colorClass }) => (
         <div className={`glass-panel p-5 border-l-2 relative overflow-hidden group transition hover:-translate-y-1 hover:shadow-lg ${colorClass}`}>
             <div className="absolute right-[-10px] top-[-10px] opacity-5 group-hover:opacity-10 transition-opacity">
@@ -66,7 +85,18 @@ const NexusStats = ({ layouts }) => {
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             
-            {/* 1. SECURED REVENUE */}
+            {/* 1. TOTAL PROJECT VALUE (Hidden for Managers) */}
+            {!isManager && (
+                <Card 
+                    title="Total Project Value" 
+                    value={formatCurr(totalProjectValue)} 
+                    sub="Estimated Total Inventory"
+                    colorClass="border-purple-500"
+                    icon={TrendingUp}
+                />
+            )}
+
+            {/* 2. SECURED REVENUE */}
             <Card 
                 title="Secured Revenue" 
                 value={formatCurr(totalRevenue)} 
@@ -75,16 +105,25 @@ const NexusStats = ({ layouts }) => {
                 icon={IndianRupee}
             />
 
-            {/* 2. TOTAL PROJECT VALUE */}
+            {/* 3. BALANCE REVENUE */}
             <Card 
-                title="Total Project Value" 
-                value={formatCurr(totalProjectValue)} 
-                sub="Estimated Total Inventory"
-                colorClass="border-purple-500"
-                icon={TrendingUp}
+                title="Balance Revenue" 
+                value={formatCurr(totalProjectValue - totalRevenue)} 
+                sub="Sold (Full) + Booked (Part)"
+                colorClass="border-blue-500"
+                icon={IndianRupee}
             />
 
-            {/* 3. SOLD PLOTS */}
+            {/* 4. TOTAL INVENTORY */}
+            <Card 
+                title="Total Inventory" 
+                value={totalPlots} 
+                sub={isManager ? "Across Assigned Projects" : "Across All Projects"}
+                colorClass="border-cyan-500"
+                icon={Layers}
+            />
+
+            {/* 5. SOLD PLOTS */}
             <Card 
                 title="Sold Plots" 
                 value={totalSold} 
@@ -93,7 +132,7 @@ const NexusStats = ({ layouts }) => {
                 icon={CheckCircle}
             />
 
-            {/* 4. BOOKED PLOTS */}
+            {/* 6. BOOKED PLOTS */}
             <Card 
                 title="Booked Plots" 
                 value={totalBooked} 
@@ -102,7 +141,7 @@ const NexusStats = ({ layouts }) => {
                 icon={Clock}
             />
 
-             {/* 5. AVAILABLE INVENTORY */}
+             {/* 7. AVAILABLE INVENTORY */}
              <Card 
                 title="Available Plots" 
                 value={totalOpen} 
@@ -111,33 +150,26 @@ const NexusStats = ({ layouts }) => {
                 icon={Lock}
             />
 
-            {/* 6. PLAN USAGE */}
-            <Card 
-                title="Plan Usage" 
-                value={`${totalPlots} / ${limits.maxPlots || 50}`} 
-                sub="Total Plots Used"
-                colorClass="border-red-500"
-                icon={BarChart3}
-            />
-
-             {/* 7. LAYOUTS */}
+            {/* 8. LAYOUTS (Dynamically hides limits for managers) */}
              <Card 
                 title="Active Projects" 
-                value={`${layouts.length} / ${limits.maxLayouts || 5}`} 
-                sub="Layout Limit"
+                value={isManager ? layouts.length : `${layouts.length} / ${limits.maxLayouts || 5}`} 
+                sub={isManager ? "Assigned Layouts" : "Layout Limit"}
                 colorClass="border-indigo-500"
                 icon={PieChart}
             />
 
-            {/* 8. TOTAL INVENTORY */}
-            <Card 
-                title="Total Units" 
-                value={totalPlots} 
-                sub="Across All Projects"
-                colorClass="border-cyan-500"
-                icon={Layers}
-            />
-
+            {/* 9. PLAN DETAILS (Hidden for Managers) */}
+            {!isManager && (
+                <Card 
+                    title="Plan Details" 
+                    value={user?.planName || 'Active Plan'} 
+                    sub={`Exp: ${expiryDateStr} • Plots: ${totalPlots}/${limits.maxPlots || 50}`}
+                    colorClass="border-red-500"
+                    icon={BarChart3}
+                />
+            )}
+            
         </div>
     );
 };

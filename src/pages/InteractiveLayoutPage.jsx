@@ -11,7 +11,7 @@ import MilestoneList from '../components/project/MilestoneList';
 import DocumentList from '../components/project/DocumentList';
 import LayoutStatsChart from '../components/project/LayoutStatsChart';
 import CustomerModal from '../components/modals/CustomerModal';
-import ReportModal from '../components/modals/ReportModal'; // <--- NEW IMPORT
+import ReportModal from '../components/modals/ReportModal'; 
 
 const InteractiveLayoutPage = () => {
     const { id } = useParams();
@@ -23,7 +23,7 @@ const InteractiveLayoutPage = () => {
     
     // Modal States
     const [activeCustomerIndex, setActiveCustomerIndex] = useState(null);
-    const [isReportModalOpen, setReportModalOpen] = useState(false); // <--- NEW STATE
+    const [isReportModalOpen, setReportModalOpen] = useState(false); 
 
     useEffect(() => {
         const unsub = onSnapshot(doc(db, "layouts", id), (doc) => {
@@ -104,13 +104,8 @@ const InteractiveLayoutPage = () => {
                 {/* LEFT COLUMN */}
                 <div className="col-span-12 lg:col-span-9 flex flex-col h-full overflow-y-auto custom-scrollbar border-r border-white/10 bg-[#0e0e10]">
                     
-                    {/* VISUALIZER */}
-                    <div className="min-h-[500px] lg:h-[60%] flex flex-col border-b border-white/10 relative shrink-0">
-                        {viewMode === 'grid' ? <InteractiveGrid layout={layout} /> : <InteractiveMap layout={layout} />}
-                    </div>
-
-                    {/* DETAILS AREA */}
-                    <div className="p-6 bg-[#09090b] space-y-6 pb-20">
+                    {/* DETAILS AREA (MOVED TO TOP) */}
+                    <div className="p-6 bg-[#09090b] space-y-6">
                         
                         {/* PROJECT INFO */}
                         <div className="glass-panel p-5 border border-white/5 relative group">
@@ -165,6 +160,10 @@ const InteractiveLayoutPage = () => {
                                         <p className="text-2xl font-bold text-white tracking-tight">{formatCurrency(totalCollected)}</p>
                                     </div>
                                     <div className="border-t border-green-500/20 pt-3">
+                                        <div className="flex items-center gap-2 text-gray-400 mb-1"><TrendingUp size={16} /><h3 className="text-[10px] font-bold uppercase tracking-wider">Balance Amount</h3></div>
+                                        <p className="text-lg font-bold text-gray-200">{formatCurrency(totalProjectValue - totalCollected)}</p>
+                                    </div>
+                                    <div className="border-t border-green-500/20 pt-3">
                                         <div className="flex items-center gap-2 text-gray-400 mb-1"><TrendingUp size={16} /><h3 className="text-[10px] font-bold uppercase tracking-wider">Total Value</h3></div>
                                         <p className="text-lg font-bold text-gray-200">{formatCurrency(totalProjectValue)}</p>
                                     </div>
@@ -193,6 +192,11 @@ const InteractiveLayoutPage = () => {
                                 </div>
                             </div>
                         </div>
+                    </div>
+
+                    {/* VISUALIZER (MOVED TO BOTTOM) */}
+                    <div className="min-h-[600px] flex-1 flex flex-col border-t border-white/10 relative shrink-0">
+                        {viewMode === 'grid' ? <InteractiveGrid layout={layout} /> : <InteractiveMap layout={layout} />}
                     </div>
                 </div>
 
@@ -228,7 +232,7 @@ const InteractiveLayoutPage = () => {
             {/* MODALS */}
             {activeCustomerIndex !== null && <CustomerModal layout={layout} index={activeCustomerIndex} data={layout.elements[activeCustomerIndex]} onClose={() => setActiveCustomerIndex(null)} />}
             
-            {/* NEW: Report Modal */}
+            {/* Report Modal */}
             {isReportModalOpen && <ReportModal layout={layout} onClose={() => setReportModalOpen(false)} />}
         </div>
     );

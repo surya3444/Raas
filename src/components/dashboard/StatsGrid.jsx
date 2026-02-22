@@ -1,7 +1,7 @@
 import React from 'react';
 import { IndianRupee, Layers, CheckCircle, Clock, Lock, BarChart3, PieChart } from 'lucide-react';
 
-const StatsGrid = ({ layouts, limits = {} }) => {
+const StatsGrid = ({ layouts, limits = {}, user = JSON.parse(localStorage.getItem('rajchavin_user') || '{}') }) => {
     let totalPlots = 0;
     let totalSold = 0;
     let totalBooked = 0;
@@ -43,6 +43,26 @@ const StatsGrid = ({ layouts, limits = {} }) => {
         return `₹ ${n.toLocaleString('en-IN')}`;
     };
 
+    // --- Format Expiry Date Safely ---
+    let expiryDateStr = "N/A";
+    if (user?.subscriptionEnd) {
+        let dateObj;
+        // Handle Firestore timestamp objects or string dates
+        if (typeof user.subscriptionEnd.toDate === 'function') {
+            dateObj = user.subscriptionEnd.toDate();
+        } else if (user.subscriptionEnd.seconds) {
+            dateObj = new Date(user.subscriptionEnd.seconds * 1000);
+        } else {
+            dateObj = new Date(user.subscriptionEnd);
+        }
+        
+        if (!isNaN(dateObj)) {
+            expiryDateStr = dateObj.toLocaleDateString('en-IN', {
+                day: 'numeric', month: 'short', year: 'numeric'
+            });
+        }
+    }
+
     const Card = ({ title, value, sub, icon: Icon, span = "" }) => (
         <div 
             className={`relative overflow-hidden rounded-2xl p-6 border border-white/10 shadow-xl group transition-all hover:scale-[1.01] ${span}`}
@@ -58,7 +78,7 @@ const StatsGrid = ({ layouts, limits = {} }) => {
             <div className="relative z-10 flex justify-between items-start">
                 <div>
                     <p className="text-[10px] text-blue-300 uppercase font-bold tracking-wider mb-1 opacity-80">{title}</p>
-                    <h3 className="text-2xl font-bold text-white tracking-tight">{value}</h3>
+                    <h3 className="text-2xl font-bold text-white tracking-tight truncate max-w-[180px]">{value}</h3>
                     {sub && <p className="text-[10px] text-gray-400 mt-1">{sub}</p>}
                 </div>
                 <div className="p-2 bg-blue-500/10 rounded-lg text-blue-400 group-hover:text-white group-hover:bg-blue-600 transition-colors">
@@ -72,13 +92,6 @@ const StatsGrid = ({ layouts, limits = {} }) => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             
             <Card 
-                title="Plan Usage" 
-                value={`${layouts.length} / ${limits.maxLayouts || 1}`}
-                sub={`Plots Used: ${totalPlots} / ${limits.maxPlots || 50}`}
-                icon={PieChart}
-            />
-
-            <Card 
                 title="Total Project Value" 
                 value={formatCurr(totalProjectValue)} 
                 sub="Total estimated inventory value"
@@ -89,6 +102,13 @@ const StatsGrid = ({ layouts, limits = {} }) => {
                 title="Secured Revenue" 
                 value={formatCurr(totalRevenue)} 
                 sub="Sold (Full) + Booked (Paid Amt)"
+                icon={IndianRupee} 
+            />
+
+            <Card 
+                title="Balance Revenue" 
+                value={formatCurr(totalProjectValue - totalRevenue)} 
+                sub="Total Value - Secured Revenue (Paid Amt)"
                 icon={IndianRupee} 
             />
 
@@ -119,6 +139,15 @@ const StatsGrid = ({ layouts, limits = {} }) => {
                 sub="Open Inventory"
                 icon={Lock} 
             />
+
+            {/* --- UPDATED PLAN DETAILS CARD --- */}
+            <Card 
+                title="Plan Details" 
+                value={user?.planName || 'Active Plan'}
+                sub={`Exp: ${expiryDateStr} • Usage: ${layouts.length}/${limits.maxLayouts || 1} Proj, ${totalPlots}/${limits.maxPlots || 50} Plots`}
+                icon={PieChart}
+            />
+
         </div>
     );
 };

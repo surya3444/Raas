@@ -7,7 +7,7 @@ import { X, Loader2 } from 'lucide-react';
 const CreatePlanModal = ({ onClose }) => {
     const [loading, setLoading] = useState(false);
     const [formData, setFormData] = useState({
-        name: '', validity: 365, maxLogins: 3, maxLayouts: 5, maxPlots: 500
+        name: '', validity: 365, maxLogins: 3, maxLayouts: 5, maxPlots: 500, maintenanceCharges: 0
     });
     const [features, setFeatures] = useState({
         interactive: false, grid: false, upload: false
@@ -56,6 +56,10 @@ const CreatePlanModal = ({ onClose }) => {
                         <div>
                             <label className="text-[10px] font-bold text-gray-500 uppercase mb-1 block">Max Logins</label>
                             <input type="number" className="form-input" defaultValue={3} onChange={e => setFormData({...formData, maxLogins: parseInt(e.target.value)})} />
+                        </div>
+                        <div className="col-span-2">
+                            <label className="text-[10px] font-bold text-gray-500 uppercase mb-1 block">Maintenance Charges</label>
+                            <input type="number" className="form-input" placeholder="e.g. 5000" onChange={e => setFormData({...formData, maintenanceCharges: Number(e.target.value)})} />
                         </div>
                     </div>
 

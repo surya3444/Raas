@@ -4,12 +4,70 @@ import { X, Calculator, IndianRupee, Save, PieChart, Ruler, Plus, Trash2, ArrowR
 
 const ExpenseCalculatorModal = ({ layout, onSave, onClose }) => {
     
+    // --- INTELLIGENT AREA PARSER ---
+    // Converts strings like "2 Acres 10 Guntas" or "5 Hectares" directly into total Sq.Ft.
+    const parseAreaToSqft = (areaStr) => {
+        if (!areaStr) return 0;
+        if (typeof areaStr === 'number') return areaStr;
+        
+        const str = String(areaStr).toLowerCase();
+        let totalSqft = 0;
+        let matched = false;
+
+        // 1 Acre = 43,560 sq ft
+        const acresMatch = str.match(/([\d.]+)\s*acre/);
+        if (acresMatch) {
+            totalSqft += parseFloat(acresMatch[1]) * 43560;
+            matched = true;
+        }
+
+        // 1 Gunta = 1,089 sq ft
+        const guntasMatch = str.match(/([\d.]+)\s*gunta/);
+        if (guntasMatch) {
+            totalSqft += parseFloat(guntasMatch[1]) * 1089;
+            matched = true;
+        }
+
+        // 1 Hectare = 107,639.1 sq ft
+        const hectaresMatch = str.match(/([\d.]+)\s*hectare/);
+        if (hectaresMatch) {
+            totalSqft += parseFloat(hectaresMatch[1]) * 107639.1;
+            matched = true;
+        }
+
+        // 1 Sq.Yard = 9 sq ft
+        const sqYardsMatch = str.match(/([\d.]+)\s*sq\.?yard/);
+        if (sqYardsMatch) {
+            totalSqft += parseFloat(sqYardsMatch[1]) * 9;
+            matched = true;
+        }
+
+        // Sq.Ft.
+        const sqFtMatch = str.match(/([\d.]+)\s*sq\.?ft/);
+        if (sqFtMatch) {
+            totalSqft += parseFloat(sqFtMatch[1]);
+            matched = true;
+        }
+
+        // If we found specific units, return the calculated total
+        if (matched) return totalSqft;
+
+        // Fallback: just parse the first number if no units matched
+        return parseFloat(str) || 0;
+    };
+
     // --- 1. ROBUST INITIALIZATION ---
-    // Safely parse existing data or set defaults
     const getInitialAreaData = () => {
         const saved = layout.areaDetails || {};
+        
+        // Use previously saved sqft total if available, else parse the raw string
+        let initialTotal = parseFloat(saved.total);
+        if (!initialTotal || isNaN(initialTotal)) {
+            initialTotal = parseAreaToSqft(layout.totalArea);
+        }
+
         return {
-            total: parseFloat(layout.totalArea) || parseFloat(saved.total) || 0,
+            total: initialTotal || 0,
             roadPct: saved.roadPct || 0,
             parkPct: saved.parkPct || 0,
             infraPct: saved.infraPct || 0,

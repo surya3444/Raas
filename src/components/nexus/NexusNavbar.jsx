@@ -24,6 +24,9 @@ const NexusNavbar = ({ title, isEditor, onViewChange, currentView }) => {
         }
     };
 
+    // Determine the Developer's name to display
+    const devName = user?.role === 'manager' ? user?.parentName : user?.name;
+
     // Shared Controls Component (Used in both Desktop & Mobile views)
     const NavbarControls = ({ isMobile = false }) => (
         <div className={`flex ${isMobile ? 'flex-col items-start gap-4 p-4' : 'items-center gap-4'}`}>
@@ -31,21 +34,24 @@ const NexusNavbar = ({ title, isEditor, onViewChange, currentView }) => {
             {/* 1. NORMAL MODE CONTROLS */}
             {!panicMode ? (
                 <>
-                    <div className={`flex items-center gap-2 ${!isMobile ? 'border-r border-white/10 pr-4 mr-2' : 'w-full justify-between bg-white/5 p-3 rounded-lg border border-white/5'}`}>
-                        <span className="text-[10px] font-bold text-gray-500">DB MODE:</span>
-                        <label className="relative inline-flex items-center cursor-pointer">
-                            <input 
-                                type="checkbox" 
-                                className="sr-only peer" 
-                                checked={isDummyMode}
-                                onChange={(e) => toggleDummy(e.target.checked)}
-                            />
-                            <div className="w-9 h-5 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
-                            <span className={`ml-2 text-[10px] font-bold ${isDummyMode ? 'text-blue-400' : 'text-white'}`}>
-                                {isDummyMode ? 'DUMMY' : 'REAL'}
-                            </span>
-                        </label>
-                    </div>
+                    {/* Hide DB Mode Toggle for Managers */}
+                    {user?.role !== 'manager' && (
+                        <div className={`flex items-center gap-2 ${!isMobile ? 'border-r border-white/10 pr-4 mr-2' : 'w-full justify-between bg-white/5 p-3 rounded-lg border border-white/5'}`}>
+                            <span className="text-[10px] font-bold text-gray-500">DB MODE:</span>
+                            <label className="relative inline-flex items-center cursor-pointer">
+                                <input 
+                                    type="checkbox" 
+                                    className="sr-only peer" 
+                                    checked={isDummyMode}
+                                    onChange={(e) => toggleDummy(e.target.checked)}
+                                />
+                                <div className="w-9 h-5 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                                <span className={`ml-2 text-[10px] font-bold ${isDummyMode ? 'text-blue-400' : 'text-white'}`}>
+                                    {isDummyMode ? 'DUMMY' : 'REAL'}
+                                </span>
+                            </label>
+                        </div>
+                    )}
                     
                     {/* Standard Logout Button */}
                     <button 
@@ -101,8 +107,8 @@ const NexusNavbar = ({ title, isEditor, onViewChange, currentView }) => {
                         className="h-8 md:h-10 w-auto object-contain transition hover:scale-105"
                     />
                     <div>
-                        <h1 className="font-bold text-xs md:text-sm tracking-wide text-white">
-                            DEVELOPER <span className="text-blue-500 font-normal">NEXUS</span>
+                        <h1 className="font-bold text-xs md:text-sm tracking-wide text-white truncate max-w-[200px] md:max-w-none">
+                            {devName ? devName.toUpperCase() : 'DEVELOPER'} <span className="text-blue-500 font-normal">NEXUS</span>
                         </h1>
                         <p className="text-[8px] md:text-[9px] text-gray-500 font-mono tracking-wider uppercase truncate max-w-[150px]">{title}</p>
                     </div>

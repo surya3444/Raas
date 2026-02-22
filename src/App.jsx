@@ -42,8 +42,8 @@ const ProtectedRoute = ({ user, allowedRoles, children }) => {
         // If unauthorized, redirect to their appropriate home
         if (user.role === 'admin') {
             return <Navigate to="/admin" replace />;
-        } else if (user.role === 'developer') {
-            // Default to Nexus for developers, or change to /static /interactive based on preference
+        } else if (user.role === 'developer' || user.role === 'manager') { // Added manager here
+            // Default to Nexus for developers and managers
             return <Navigate to="/nexus" replace />;
         } else {
             return <Navigate to="/" replace />;
@@ -55,7 +55,7 @@ const ProtectedRoute = ({ user, allowedRoles, children }) => {
 };
 
 const App = () => {
-    // Retrieve user (ensuring strict role management)
+    // Retrieve user
     const user = JSON.parse(localStorage.getItem('rajchavin_user') || 'null');
 
     return (
@@ -77,7 +77,8 @@ const App = () => {
 
                 {/* 3. DEVELOPER ROUTES (STATIC MODE) */}
                 <Route path="/static" element={
-                    <ProtectedRoute user={user} allowedRoles={['developer', 'admin']}>
+                    // Added 'manager'
+                    <ProtectedRoute user={user} allowedRoles={['developer', 'admin', 'manager']}>
                         <DeveloperLayout />
                     </ProtectedRoute>
                 }>
@@ -87,7 +88,8 @@ const App = () => {
 
                 {/* 4. DEVELOPER ROUTES (INTERACTIVE MODE) */}
                 <Route path="/interactive" element={
-                    <ProtectedRoute user={user} allowedRoles={['developer', 'admin']}>
+                    // Added 'manager'
+                    <ProtectedRoute user={user} allowedRoles={['developer', 'admin', 'manager']}>
                         <DeveloperLayout />
                     </ProtectedRoute>
                 }>
@@ -97,7 +99,8 @@ const App = () => {
 
                 {/* 5. NEXUS ROUTES (ADVANCED MODE) */}
                 <Route path="/nexus/*" element={
-                    <ProtectedRoute user={user} allowedRoles={['developer', 'admin']}>
+                    // Added 'manager' so they don't get booted out!
+                    <ProtectedRoute user={user} allowedRoles={['developer', 'admin', 'manager']}>
                         <NexusProvider user={user}>
                             <Routes>
                                 <Route index element={<NexusDashboard />} />

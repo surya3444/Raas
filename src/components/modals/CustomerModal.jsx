@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { updateDoc, doc, getDoc } from "firebase/firestore"; // Added getDoc
+import { updateDoc, doc, getDoc } from "firebase/firestore";
 import { db } from '../../firebase';
-import { X, Trash2, Upload, FileText, Download, User, MapPin, Phone, StickyNote, Ruler, Compass, IndianRupee, Calendar } from 'lucide-react';
+import { X, Trash2, Upload, FileText, Download, User, MapPin, Phone, StickyNote, Ruler, Compass, IndianRupee, Calendar, Plus, Mail } from 'lucide-react';
 
 // --- UTILITY: Convert Number to Words (Indian Format) ---
 const numberToWords = (num) => {
@@ -24,48 +24,80 @@ const numberToWords = (num) => {
 };
 
 const CustomerModal = ({ layout, index, data, onClose }) => {
-    // FIX: Initialize with empty strings to prevent "Uncontrolled Input" warning
+    
+    // Initialize form data. Notice we parse installaments or default to an empty array.
     const [formData, setFormData] = useState({ 
-        id: data.id || '',
-        status: data.status || 'open',
-        price: data.price || '',
-        size: data.size || '',
-        facing: data.facing || '',
-        bookingAmount: data.bookingAmount || '',
-        bookingDate: data.bookingDate || '',      
-        purchaseDueDate: data.purchaseDueDate || '',  
-        purchaseDate: data.purchaseDate || '',     
-        customerName: data.customerName || '',
-        customerPhone: data.customerPhone || '',
-        customerAddress: data.customerAddress || '',
-        remarks: data.remarks || '',
-        documents: data.documents || [],
-        ...data // Override with any other props, but defaults above protect against undefined
+        id: '',
+        status: 'open',
+        price: '',
+        size: '',
+        facing: '',
+        installments: [], // Array of { id, amount, date, reference }
+        purchaseDueDate: '',  
+        purchaseDate: '',     
+        customerName: '',
+        customerPhone: '',
+        customerEmail: '', // NEW: Email field
+        customerAddress: '',
+        remarks: '',
+        documents: []
     });
 
     // Sync prop changes safely
     useEffect(() => { 
-        setFormData(prev => ({ 
-            ...prev, 
-            ...data,
-            // Double protection for dates/money fields
-            bookingDate: data.bookingDate || '',
-            purchaseDueDate: data.purchaseDueDate || '',
-            purchaseDate: data.purchaseDate || '',
-            bookingAmount: data.bookingAmount || '',
-            price: data.price || ''
-        })); 
+        if(data) {
+            setFormData(prev => ({ 
+                ...prev, 
+                ...data,
+                // Ensure default fallbacks are applied correctly
+                size: data.size || '',
+                facing: data.facing || '',
+                purchaseDueDate: data.purchaseDueDate || '',
+                purchaseDate: data.purchaseDate || '',
+                price: data.price || '',
+                installments: data.installments || []
+            })); 
+        }
     }, [data]);
 
-    // Calculate Balance
+    // Calculate Total Paid and Balance
     const price = Number(formData.price) || 0;
-    const bookingAmt = Number(formData.bookingAmount) || 0;
-    const balance = price - bookingAmt;
+    
+    // Calculate total paid by summing all installments
+    const totalPaid = formData.installments.reduce((sum, inst) => sum + (Number(inst.amount) || 0), 0);
+    const balance = Math.max(0, price - totalPaid);
+
+    // --- INSTALLMENT HANDLERS ---
+    const addInstallment = () => {
+        const newInstallment = {
+            id: Date.now().toString(),
+            amount: '',
+            date: new Date().toISOString().split('T')[0], // Default to today
+            reference: '' // e.g. "Cash", "Cheque #123", "UPI"
+        };
+        setFormData(prev => ({ ...prev, installments: [...prev.installments, newInstallment] }));
+    };
+
+    const updateInstallment = (id, field, value) => {
+        setFormData(prev => ({
+            ...prev,
+            installments: prev.installments.map(inst => 
+                inst.id === id ? { ...inst, [field]: value } : inst
+            )
+        }));
+    };
+
+    const removeInstallment = (id) => {
+        if(!confirm("Remove this payment record?")) return;
+        setFormData(prev => ({
+            ...prev,
+            installments: prev.installments.filter(inst => inst.id !== id)
+        }));
+    };
 
     const handleSave = async () => {
         try {
-            // FIX: Don't rely on 'layout.elements' prop as it might be filtered by the parent.
-            // Fetch the FRESH, COMPLETE list from the database.
+            // Fetch fresh layout data to ensure we don't overwrite other users' concurrent edits
             const layoutRef = doc(db, "layouts", layout.id);
             const layoutSnap = await getDoc(layoutRef);
 
@@ -73,9 +105,15 @@ const CustomerModal = ({ layout, index, data, onClose }) => {
                 const freshData = layoutSnap.data();
                 const allElements = freshData.elements || [];
 
-                // Update the specific element by ID in the master list
+                // Instead of a single 'bookingAmount', we save 'totalPaid' for easy querying in dashboards, 
+                // alongside the detailed 'installments' array.
+                const updatedElementData = {
+                    ...formData,
+                    bookingAmount: totalPaid // Keep this for backward compatibility with your dashboard stats
+                };
+
                 const newElements = allElements.map(el => 
-                    el.id === data.id ? { ...el, ...formData } : el
+                    el.id === data.id ? { ...el, ...updatedElementData } : el
                 );
 
                 await updateDoc(layoutRef, { elements: newElements });
@@ -91,7 +129,6 @@ const CustomerModal = ({ layout, index, data, onClose }) => {
         if(!confirm("Delete this plot entry?")) return;
         
         try {
-            // FIX: Same logic as save - fetch fresh list to avoid deleting hidden infra
             const layoutRef = doc(db, "layouts", layout.id);
             const layoutSnap = await getDoc(layoutRef);
 
@@ -99,7 +136,6 @@ const CustomerModal = ({ layout, index, data, onClose }) => {
                 const freshData = layoutSnap.data();
                 const allElements = freshData.elements || [];
 
-                // Filter out ONLY the current item by ID
                 const newElements = allElements.filter(el => el.id !== data.id);
                 
                 await updateDoc(layoutRef, { elements: newElements });
@@ -159,12 +195,12 @@ const CustomerModal = ({ layout, index, data, onClose }) => {
                             />
                         </div>
                         <div>
-                            <label className="text-[10px] text-gray-500 uppercase font-bold mb-1 flex items-center gap-1"><Ruler size={10}/> Size (Sq.ft)</label>
+                            <label className="text-[10px] text-gray-500 uppercase font-bold mb-1 flex items-center gap-1"><Ruler size={10}/> Size</label>
                             <input 
                                 className="w-full bg-black/40 border border-white/10 rounded p-2.5 text-sm text-white focus:border-blue-500 outline-none"
                                 value={formData.size} 
                                 onChange={e => setFormData({...formData, size: e.target.value})}
-                                placeholder="e.g. 1200"
+                                placeholder="e.g. 1200 Sq.ft"
                             />
                         </div>
                         <div>
@@ -224,56 +260,82 @@ const CustomerModal = ({ layout, index, data, onClose }) => {
                             </div>
                         </div>
 
-                        {/* --- DYNAMIC FIELDS BASED ON STATUS --- */}
-                        
-                        {/* 1. BOOKED STATUS */}
+                        {/* --- 1. BOOKED STATUS (INSTALLMENTS LOGIC) --- */}
                         {formData.status === 'booked' && (
                             <div className="mt-4 pt-4 border-t border-white/10 animate-in fade-in slide-in-from-top-2">
-                                <div className="grid grid-cols-2 gap-4 mb-4">
-                                    <div>
-                                        <label className="text-[10px] text-yellow-500 uppercase font-bold mb-1">Booking Amount Paid</label>
-                                        <input 
-                                            type="number" 
-                                            className="w-full bg-yellow-500/10 border border-yellow-500/30 rounded p-2.5 text-sm text-white focus:border-yellow-500 outline-none"
-                                            value={formData.bookingAmount} 
-                                            onChange={e => setFormData({...formData, bookingAmount: e.target.value})}
-                                            placeholder="0"
-                                        />
-                                        {/* --- MONEY IN WORDS --- */}
-                                        {formData.bookingAmount > 0 && (
-                                            <p className="text-[10px] text-yellow-400 mt-1 italic capitalize">
-                                                {numberToWords(formData.bookingAmount)}
-                                            </p>
-                                        )}
-                                    </div>
-                                    <div>
-                                        <label className="text-[10px] text-gray-500 uppercase font-bold mb-1">Balance Pending</label>
-                                        <div className="w-full bg-black/40 border border-white/10 rounded p-2.5 text-sm text-gray-400 font-mono">
-                                            ₹ {balance.toLocaleString('en-IN')}
-                                        </div>
-                                    </div>
-                                </div>
                                 
-                                {/* Dates for Booking */}
-                                <div className="grid grid-cols-2 gap-4">
+                                <div className="flex justify-between items-end mb-3">
                                     <div>
-                                        <label className="text-[10px] text-gray-500 uppercase font-bold mb-1 flex items-center gap-1">
-                                            <Calendar size={10} /> Booking Date
-                                        </label>
-                                        <input 
-                                            type="date"
-                                            className="w-full bg-black/40 border border-white/10 rounded p-2.5 text-sm text-white focus:border-blue-500 outline-none"
-                                            value={formData.bookingDate || ''}
-                                            onChange={e => setFormData({...formData, bookingDate: e.target.value})}
-                                        />
+                                        <h3 className="text-xs font-bold text-yellow-500 uppercase flex items-center gap-1">Payment Log</h3>
+                                        <p className="text-[10px] text-gray-500 mt-0.5">Record partial payments</p>
+                                    </div>
+                                    <button 
+                                        onClick={addInstallment} 
+                                        className="text-[10px] bg-yellow-500/10 text-yellow-400 hover:bg-yellow-500 hover:text-white px-3 py-1.5 rounded flex items-center gap-1 transition font-bold"
+                                    >
+                                        <Plus size={12}/> Add Payment
+                                    </button>
+                                </div>
+
+                                {/* Installments List */}
+                                <div className="space-y-2 mb-4 max-h-[250px] overflow-y-auto custom-scrollbar pr-1">
+                                    {formData.installments.length === 0 ? (
+                                        <div className="text-center py-4 bg-black/20 rounded border border-white/5 text-xs text-gray-500 italic">No payments recorded yet.</div>
+                                    ) : (
+                                        formData.installments.map((inst, idx) => (
+                                            <div key={inst.id} className="flex flex-col gap-1 bg-black/40 border border-white/10 p-2 rounded-lg group focus-within:border-yellow-500/50 transition">
+                                                <div className="flex gap-2 items-center">
+                                                    <span className="text-[10px] font-bold text-gray-600 w-4">{idx + 1}.</span>
+                                                    <input 
+                                                        type="date" 
+                                                        className="bg-transparent text-xs text-white outline-none w-28"
+                                                        value={inst.date}
+                                                        onChange={(e) => updateInstallment(inst.id, 'date', e.target.value)}
+                                                    />
+                                                    <input 
+                                                        type="number" 
+                                                        className="bg-transparent text-sm text-yellow-400 font-bold outline-none w-24 flex-1"
+                                                        placeholder="Amount"
+                                                        value={inst.amount}
+                                                        onChange={(e) => updateInstallment(inst.id, 'amount', e.target.value)}
+                                                    />
+                                                    <input 
+                                                        type="text" 
+                                                        className="bg-transparent text-xs text-gray-400 outline-none flex-1 hidden sm:block"
+                                                        placeholder="Ref/Mode (e.g. UPI)"
+                                                        value={inst.reference}
+                                                        onChange={(e) => updateInstallment(inst.id, 'reference', e.target.value)}
+                                                    />
+                                                    <button onClick={() => removeInstallment(inst.id)} className="text-gray-600 hover:text-red-500 p-1 opacity-0 group-hover:opacity-100 transition"><X size={14}/></button>
+                                                </div>
+                                                {/* --- DYNAMIC MONEY IN WORDS FOR INSTALLMENT --- */}
+                                                {inst.amount > 0 && (
+                                                    <p className="text-[9px] text-yellow-500/70 italic capitalize ml-6 pl-1">
+                                                        {numberToWords(inst.amount)}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+
+                                {/* Summary & Due Date */}
+                                <div className="grid grid-cols-2 gap-4 bg-yellow-500/5 border border-yellow-500/20 rounded-xl p-3">
+                                    <div>
+                                        <label className="text-[10px] text-gray-500 uppercase font-bold mb-1">Total Paid</label>
+                                        <div className="text-sm font-bold text-yellow-400">₹ {totalPaid.toLocaleString('en-IN')}</div>
                                     </div>
                                     <div>
+                                        <label className="text-[10px] text-gray-500 uppercase font-bold mb-1">Balance Due</label>
+                                        <div className="text-sm font-bold text-red-400">₹ {balance.toLocaleString('en-IN')}</div>
+                                    </div>
+                                    <div className="col-span-2 mt-2 pt-2 border-t border-white/5">
                                         <label className="text-[10px] text-red-400 uppercase font-bold mb-1 flex items-center gap-1">
-                                            <Calendar size={10} /> Due Date (Purchase)
+                                            <Calendar size={10} /> Final Due Date
                                         </label>
                                         <input 
                                             type="date"
-                                            className="w-full bg-black/40 border border-white/10 rounded p-2.5 text-sm text-white focus:border-blue-500 outline-none"
+                                            className="w-full bg-black/40 border border-white/10 rounded p-2 text-xs text-white focus:border-red-500 outline-none"
                                             value={formData.purchaseDueDate || ''}
                                             onChange={e => setFormData({...formData, purchaseDueDate: e.target.value})}
                                         />
@@ -282,12 +344,12 @@ const CustomerModal = ({ layout, index, data, onClose }) => {
                             </div>
                         )}
 
-                        {/* 2. SOLD STATUS */}
+                        {/* --- 2. SOLD STATUS --- */}
                         {formData.status === 'sold' && (
                             <div className="mt-4 pt-4 border-t border-white/10 animate-in fade-in slide-in-from-top-2">
                                 <div>
                                     <label className="text-[10px] text-green-500 uppercase font-bold mb-1 flex items-center gap-1">
-                                        <Calendar size={10} /> Purchase / Sale Date
+                                        <Calendar size={10} /> Purchase / Registration Date
                                     </label>
                                     <input 
                                         type="date"
@@ -316,23 +378,35 @@ const CustomerModal = ({ layout, index, data, onClose }) => {
                                         placeholder="Full Name"
                                     />
                                 </div>
-                                <div>
-                                    <label className="text-[10px] text-gray-500 uppercase font-bold mb-1 flex items-center gap-1"><Phone size={10}/> Mobile</label>
-                                    <input 
-                                        className="w-full bg-black/40 border border-white/10 rounded p-2.5 text-sm text-white focus:border-blue-500 outline-none"
-                                        value={formData.customerPhone || ''} 
-                                        onChange={e => setFormData({...formData, customerPhone: e.target.value})}
-                                        placeholder="+91 99999 99999"
-                                    />
+                                <div className="grid grid-cols-2 gap-2">
+                                    <div>
+                                        <label className="text-[10px] text-gray-500 uppercase font-bold mb-1 flex items-center gap-1"><Phone size={10}/> Mobile</label>
+                                        <input 
+                                            className="w-full bg-black/40 border border-white/10 rounded p-2.5 text-sm text-white focus:border-blue-500 outline-none"
+                                            value={formData.customerPhone || ''} 
+                                            onChange={e => setFormData({...formData, customerPhone: e.target.value})}
+                                            placeholder="+91..."
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] text-gray-500 uppercase font-bold mb-1 flex items-center gap-1"><Mail size={10}/> Email</label>
+                                        <input 
+                                            type="email"
+                                            className="w-full bg-black/40 border border-white/10 rounded p-2.5 text-sm text-white focus:border-blue-500 outline-none"
+                                            value={formData.customerEmail || ''} 
+                                            onChange={e => setFormData({...formData, customerEmail: e.target.value})}
+                                            placeholder="@"
+                                        />
+                                    </div>
                                 </div>
                             </div>
                             <div>
                                 <label className="text-[10px] text-gray-500 uppercase font-bold mb-1 flex items-center gap-1"><MapPin size={10}/> Address</label>
                                 <textarea 
-                                    className="w-full bg-black/40 border border-white/10 rounded p-2.5 text-sm text-white focus:border-blue-500 outline-none min-h-[60px]"
+                                    className="w-full bg-black/40 border border-white/10 rounded p-2.5 text-sm text-white focus:border-blue-500 outline-none min-h-[40px]"
                                     value={formData.customerAddress || ''} 
                                     onChange={e => setFormData({...formData, customerAddress: e.target.value})}
-                                    placeholder="Customer's permanent address"
+                                    placeholder="Permanent address"
                                 />
                             </div>
                         </div>
