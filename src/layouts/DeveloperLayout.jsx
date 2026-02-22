@@ -48,8 +48,8 @@ const DeveloperLayout = () => {
                 </div>
                 <div className="flex items-center gap-4">
                     <div className="text-right hidden sm:block">
-                        <p className="text-sm font-bold text-white">{user.name}</p>
-                        <p className="text-[10px] text-blue-500">{user.planName || "Standard Plan"}</p>
+                        <p className="text-m font-bold text-white">{user.name}</p>
+                       {/* <p className="text-[10px] text-blue-500">{user.planName || "Standard Plan"}</p> */}
                     </div>
                     <button onClick={handleLogout} className="bg-red-500/10 text-red-500 p-2 rounded-lg hover:bg-red-500/20 transition" title="Logout">
                         <LogOut size={18} />

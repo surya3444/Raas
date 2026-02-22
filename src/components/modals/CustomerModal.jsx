@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { updateDoc, doc, getDoc } from "firebase/firestore";
+import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import { db } from '../../firebase';
-import { X, Trash2, Upload, FileText, Download, User, MapPin, Phone, StickyNote, Ruler, Compass, IndianRupee, Calendar, Plus, Mail } from 'lucide-react';
+import { X, Trash2, Upload, FileText, Download, User, MapPin, Phone, StickyNote, Ruler, Compass, IndianRupee, Calendar, Plus, Mail, Loader2 } from 'lucide-react';
 
 // --- UTILITY: Convert Number to Words (Indian Format) ---
 const numberToWords = (num) => {
@@ -42,6 +43,8 @@ const CustomerModal = ({ layout, index, data, onClose }) => {
         remarks: '',
         documents: []
     });
+
+    const [isUploading, setIsUploading] = useState(false);
 
     // Sync prop changes safely
     useEffect(() => { 
@@ -147,18 +150,57 @@ const CustomerModal = ({ layout, index, data, onClose }) => {
         }
     };
 
-    const handleDocUpload = (e) => {
+    // --- FIREBASE STORAGE UPLOAD ---
+    const handleDocUpload = async (e) => {
         const file = e.target.files[0];
         if(!file) return;
-        const reader = new FileReader();
-        reader.onload = (ev) => {
-            const newDoc = { name: file.name, url: ev.target.result };
+
+        setIsUploading(true);
+        try {
+            const storage = getStorage();
+            // Sanitize filename and make it unique to avoid overwriting
+            const safeFileName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
+            const uniqueFileName = `${Date.now()}_${safeFileName}`;
+            const plotId = formData.id || 'unassigned';
+            
+            // Reference in storage: layouts/{layoutId}/plots/{plotId}/{filename}
+            const storageRef = ref(storage, `layouts/${layout.id}/plots/${plotId}/${uniqueFileName}`);
+            
+            // Upload to Firebase Storage
+            await uploadBytes(storageRef, file);
+            
+            // Get the public URL
+            const downloadURL = await getDownloadURL(storageRef);
+            
+            const newDoc = { name: file.name, url: downloadURL };
             setFormData(prev => ({ ...prev, documents: [...(prev.documents || []), newDoc] }));
-        };
-        reader.readAsDataURL(file);
+        } catch (error) {
+            console.error("Upload error:", error);
+            alert("Failed to upload document: " + error.message);
+        } finally {
+            setIsUploading(false);
+            // Reset the input so the same file can be selected again if needed
+            e.target.value = null; 
+        }
     };
 
-    const removeDoc = (docIdx) => {
+    const removeDoc = async (docIdx) => {
+        if(!confirm("Are you sure you want to delete this document?")) return;
+        
+        const docToRemove = formData.documents[docIdx];
+        
+        // Attempt to delete from Firebase Storage if it's a valid storage URL
+        if (docToRemove && docToRemove.url && docToRemove.url.includes("firebasestorage")) {
+            try {
+                const storage = getStorage();
+                const fileRef = ref(storage, docToRemove.url); 
+                await deleteObject(fileRef);
+            } catch (err) {
+                console.error("Failed to delete from storage, continuing to remove from UI", err);
+            }
+        }
+
+        // Remove from UI / Form Data
         setFormData(prev => ({
             ...prev,
             documents: prev.documents.filter((_, i) => i !== docIdx)
@@ -418,19 +460,20 @@ const CustomerModal = ({ layout, index, data, onClose }) => {
                         <div>
                             <div className="flex justify-between items-center mb-2">
                                 <label className="text-[10px] text-gray-500 uppercase font-bold flex items-center gap-1"><FileText size={10}/> Documents</label>
-                                <label className="text-[10px] text-blue-500 font-bold cursor-pointer hover:text-blue-400 transition flex items-center gap-1">
-                                    <Upload size={10} /> Upload
-                                    <input type="file" className="hidden" onChange={handleDocUpload} />
+                                <label className={`text-[10px] ${isUploading ? 'text-gray-500' : 'text-blue-500 hover:text-blue-400'} font-bold cursor-pointer transition flex items-center gap-1`}>
+                                    {isUploading ? <Loader2 size={10} className="animate-spin" /> : <Upload size={10} />}
+                                    {isUploading ? 'Uploading...' : 'Upload'}
+                                    <input type="file" className="hidden" onChange={handleDocUpload} disabled={isUploading} />
                                 </label>
                             </div>
                             <div className="bg-black/20 border border-white/5 rounded-lg p-2 space-y-2 min-h-[80px]">
-                                {(formData.documents || []).length === 0 && <p className="text-[10px] text-gray-600 text-center py-4">No files uploaded</p>}
+                                {(formData.documents || []).length === 0 && !isUploading && <p className="text-[10px] text-gray-600 text-center py-4">No files uploaded</p>}
                                 
                                 {(formData.documents || []).map((d, i) => (
                                     <div key={i} className="flex justify-between items-center text-[11px] bg-white/5 p-2 rounded group border border-transparent hover:border-white/10 transition">
                                         <span className="truncate w-32 text-gray-300">{d.name}</span>
                                         <div className="flex gap-2">
-                                            <a href={d.url} download={d.name} className="text-gray-400 hover:text-blue-500 transition"><Download size={14}/></a>
+                                            <a href={d.url} target="_blank" rel="noreferrer" className="text-gray-400 hover:text-blue-500 transition"><Download size={14}/></a>
                                             <button onClick={() => removeDoc(i)} className="text-gray-400 hover:text-red-500 transition"><Trash2 size={14}/></button>
                                         </div>
                                     </div>
@@ -453,8 +496,8 @@ const CustomerModal = ({ layout, index, data, onClose }) => {
                     {/* Footer Actions */}
                     <div className="flex gap-3 pt-4 border-t border-white/10">
                         <button onClick={onClose} className="flex-1 bg-white/5 hover:bg-white/10 text-sm font-bold py-3 rounded text-gray-300 transition">Cancel</button>
-                        <button onClick={handleSave} className="flex-1 bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold py-3 rounded transition shadow-lg shadow-blue-900/20">
-                            Save Changes
+                        <button onClick={handleSave} disabled={isUploading} className="flex-1 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-bold py-3 rounded transition shadow-lg shadow-blue-900/20">
+                            {isUploading ? 'Uploading file...' : 'Save Changes'}
                         </button>
                     </div>
 

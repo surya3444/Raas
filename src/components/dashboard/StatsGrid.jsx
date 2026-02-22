@@ -108,7 +108,7 @@ const StatsGrid = ({ layouts, limits = {}, user = JSON.parse(localStorage.getIte
             <Card 
                 title="Balance Revenue" 
                 value={formatCurr(totalProjectValue - totalRevenue)} 
-                sub="Total Value - Secured Revenue (Paid Amt)"
+                sub="Total Value - Secured Revenue"
                 icon={IndianRupee} 
             />
 

@@ -220,9 +220,10 @@ const LoginPage = () => {
                         />
                     </div>
                     
-                    <p className="text-[10px] font-bold tracking-[0.2em] text-gray-500 uppercase mt-2">
-                        The Operating System of Real Estate
+                    <p className="text-[10px] font-bold tracking-[0.2em] text-gray-300 uppercase mt-2">
+                       RaaS™ - The Operating System of Modern Real Estate
                     </p>
+                    <span className='text-[6px] font-bold tracking-[0.2em] text-gray-500 uppercase mt-2'>Control Every Plot. Track Every rupee. Grow Without Limits.</span>
                 </div>
 
                 {!showSessionManager ? (

@@ -106,47 +106,6 @@ const InteractiveLayoutPage = () => {
                     
                     {/* DETAILS AREA (MOVED TO TOP) */}
                     <div className="p-6 bg-[#09090b] space-y-6">
-                        
-                        {/* PROJECT INFO */}
-                        <div className="glass-panel p-5 border border-white/5 relative group">
-                            <div className="flex justify-between items-start mb-4">
-                                <div className="flex items-center gap-2 text-white">
-                                    <MapPin className="text-brand" size={18} />
-                                    <h3 className="font-bold text-lg">Project Details</h3>
-                                </div>
-                                {!isEditingInfo ? (
-                                    <button onClick={() => setIsEditingInfo(true)} className="text-gray-500 hover:text-white p-1 rounded hover:bg-white/10 transition"><Pencil size={14} /></button>
-                                ) : (
-                                    <div className="flex gap-2">
-                                        <button onClick={() => setIsEditingInfo(false)} className="p-1.5 rounded bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white transition"><X size={14}/></button>
-                                        <button onClick={handleSaveInfo} className="p-1.5 rounded bg-green-500/10 text-green-500 hover:bg-green-500 hover:text-white transition"><Check size={14}/></button>
-                                    </div>
-                                )}
-                            </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div>
-                                    <label className="text-[10px] text-gray-500 uppercase font-bold block mb-2">Project Address</label>
-                                    {isEditingInfo ? (
-                                        <textarea className="w-full bg-black/40 border border-white/10 rounded p-2 text-sm text-white focus:border-brand outline-none min-h-[80px]" value={editData.address} onChange={(e) => setEditData({...editData, address: e.target.value})} placeholder="Enter full address..." />
-                                    ) : (
-                                        <p className="text-gray-300 text-sm leading-relaxed whitespace-pre-wrap">{layout.address || "No address details provided."}</p>
-                                    )}
-                                </div>
-                                <div>
-                                    <label className="text-[10px] text-gray-500 uppercase font-bold block mb-2">Google Maps Link</label>
-                                    {isEditingInfo ? (
-                                        <input className="w-full bg-black/40 border border-white/10 rounded p-2 text-sm text-brand focus:border-brand outline-none" value={editData.addressLink} onChange={(e) => setEditData({...editData, addressLink: e.target.value})} placeholder="http://googleusercontent.com/..." />
-                                    ) : (
-                                        layout.addressLink ? (
-                                            <a href={layout.addressLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-blue-400 hover:text-blue-300 text-sm font-medium transition p-2 bg-blue-500/5 rounded border border-blue-500/10 hover:border-blue-500/30">
-                                                <ExternalLink size={14} /> Open Location in Maps
-                                            </a>
-                                        ) : <p className="text-gray-600 text-xs italic">No map link added.</p>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
 
                         {/* DASHBOARD GRID */}
                         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 items-start">
@@ -192,6 +151,48 @@ const InteractiveLayoutPage = () => {
                                 </div>
                             </div>
                         </div>
+                        
+                        {/* PROJECT INFO (MOVED TO BOTTOM OF DETAILS) */}
+                        <div className="glass-panel p-5 border border-white/5 relative group">
+                            <div className="flex justify-between items-start mb-4">
+                                <div className="flex items-center gap-2 text-white">
+                                    <MapPin className="text-brand" size={18} />
+                                    <h3 className="font-bold text-lg">Project Details</h3>
+                                </div>
+                                {!isEditingInfo ? (
+                                    <button onClick={() => setIsEditingInfo(true)} className="text-gray-500 hover:text-white p-1 rounded hover:bg-white/10 transition"><Pencil size={14} /></button>
+                                ) : (
+                                    <div className="flex gap-2">
+                                        <button onClick={() => setIsEditingInfo(false)} className="p-1.5 rounded bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white transition"><X size={14}/></button>
+                                        <button onClick={handleSaveInfo} className="p-1.5 rounded bg-green-500/10 text-green-500 hover:bg-green-500 hover:text-white transition"><Check size={14}/></button>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div>
+                                    <label className="text-[10px] text-gray-500 uppercase font-bold block mb-2">Project Address</label>
+                                    {isEditingInfo ? (
+                                        <textarea className="w-full bg-black/40 border border-white/10 rounded p-2 text-sm text-white focus:border-brand outline-none min-h-[80px]" value={editData.address} onChange={(e) => setEditData({...editData, address: e.target.value})} placeholder="Enter full address..." />
+                                    ) : (
+                                        <p className="text-gray-300 text-sm leading-relaxed whitespace-pre-wrap">{layout.address || "No address details provided."}</p>
+                                    )}
+                                </div>
+                                <div>
+                                    <label className="text-[10px] text-gray-500 uppercase font-bold block mb-2">Google Maps Link</label>
+                                    {isEditingInfo ? (
+                                        <input className="w-full bg-black/40 border border-white/10 rounded p-2 text-sm text-brand focus:border-brand outline-none" value={editData.addressLink} onChange={(e) => setEditData({...editData, addressLink: e.target.value})} placeholder="http://googleusercontent.com/..." />
+                                    ) : (
+                                        layout.addressLink ? (
+                                            <a href={layout.addressLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-blue-400 hover:text-blue-300 text-sm font-medium transition p-2 bg-blue-500/5 rounded border border-blue-500/10 hover:border-blue-500/30">
+                                                <ExternalLink size={14} /> Open Location in Maps
+                                            </a>
+                                        ) : <p className="text-gray-600 text-xs italic">No map link added.</p>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+
                     </div>
 
                     {/* VISUALIZER (MOVED TO BOTTOM) */}

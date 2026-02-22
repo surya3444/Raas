@@ -64,23 +64,69 @@ const NexusStats = ({ layouts, isManager }) => {
         }
     }
 
-    const Card = ({ title, value, sub, icon: Icon, colorClass }) => (
-        <div className={`glass-panel p-5 border-l-2 relative overflow-hidden group transition hover:-translate-y-1 hover:shadow-lg ${colorClass}`}>
-            <div className="absolute right-[-10px] top-[-10px] opacity-5 group-hover:opacity-10 transition-opacity">
-                {Icon && <Icon size={80} />}
-            </div>
-            <div className="flex justify-between items-start relative z-10">
-                <div>
-                    <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">{title}</p>
-                    <h3 className="text-2xl font-bold text-white mt-1 tracking-tight">{value}</h3>
-                    {sub && <p className="text-[10px] text-gray-400 mt-1 font-medium">{sub}</p>}
+    const Card = ({ title, value, sub, icon: Icon, color }) => {
+        // Neon Glow Dictionary mapping colors to rich Box Shadows
+        const glowStyles = {
+            purple: "border-purple-500 shadow-[0_0_15px_rgba(168,85,247,0.15)] hover:shadow-[0_0_30px_rgba(168,85,247,0.35)]",
+            blue: "border-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.15)] hover:shadow-[0_0_30px_rgba(59,130,246,0.35)]",
+            cyan: "border-cyan-500 shadow-[0_0_15px_rgba(6,182,212,0.15)] hover:shadow-[0_0_30px_rgba(6,182,212,0.35)]",
+            green: "border-green-500 shadow-[0_0_15px_rgba(34,197,94,0.15)] hover:shadow-[0_0_30px_rgba(34,197,94,0.35)]",
+            yellow: "border-yellow-500 shadow-[0_0_15px_rgba(234,179,8,0.15)] hover:shadow-[0_0_30px_rgba(234,179,8,0.35)]",
+            gold: "border-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.15)] hover:shadow-[0_0_30px_rgba(245,158,11,0.35)]",
+            gray: "border-gray-500 shadow-[0_0_15px_rgba(107,114,128,0.15)] hover:shadow-[0_0_30px_rgba(107,114,128,0.35)]",
+            indigo: "border-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.15)] hover:shadow-[0_0_30px_rgba(99,102,241,0.35)]",
+            red: "border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.15)] hover:shadow-[0_0_30px_rgba(239,68,68,0.35)]",
+        };
+
+        const iconColors = {
+            purple: "text-purple-400 group-hover:text-purple-300",
+            blue: "text-blue-400 group-hover:text-blue-300",
+            cyan: "text-cyan-400 group-hover:text-cyan-300",
+            green: "text-green-400 group-hover:text-green-300",
+            yellow: "text-yellow-400 group-hover:text-yellow-300",
+            gold: "text-amber-400 group-hover:text-amber-300",
+            gray: "text-gray-400 group-hover:text-gray-300",
+            indigo: "text-indigo-400 group-hover:text-indigo-300",
+            red: "text-red-400 group-hover:text-red-300",
+        };
+
+        // Vibrant background gradient based on color
+        const bgGradients = {
+            purple: "bg-gradient-to-br from-purple-900/30 to-[#121214]",
+            blue: "bg-gradient-to-br from-blue-900/30 to-[#121214]",
+            cyan: "bg-gradient-to-br from-cyan-900/30 to-[#121214]",
+            green: "bg-gradient-to-br from-green-900/30 to-[#121214]",
+            yellow: "bg-gradient-to-br from-yellow-900/30 to-[#121214]",
+            gold: "bg-gradient-to-br from-amber-900/30 to-[#121214]",
+            gray: "bg-gradient-to-br from-gray-800/30 to-[#121214]",
+            indigo: "bg-gradient-to-br from-indigo-900/30 to-[#121214]",
+            red: "bg-gradient-to-br from-red-900/30 to-[#121214]",
+        };
+
+        return (
+            <div className={`p-5 border-l-[3px] border-y border-r border-white/5 rounded-2xl relative overflow-hidden group transition-all duration-500 hover:-translate-y-1 backdrop-blur-md ${bgGradients[color]} ${glowStyles[color]}`}>
+                
+                {/* Background Icon (Subtle) */}
+                <div className={`absolute right-[-10px] top-[-10px] opacity-[0.04] group-hover:opacity-[0.08] transition-opacity duration-500 ${iconColors[color]}`}>
+                    {Icon && <Icon size={80} />}
                 </div>
-                <div className={`p-2 rounded-lg bg-white/5 text-gray-400`}>
-                    {Icon && <Icon size={20} />}
+
+                {/* Inner Ambient Glow (Top Left) */}
+                <div className={`absolute -top-10 -left-10 w-32 h-32 rounded-full bg-${color === 'gold' ? 'amber' : color}-500/10 blur-3xl pointer-events-none group-hover:bg-${color === 'gold' ? 'amber' : color}-500/20 transition-all duration-500`}></div>
+
+                <div className="flex justify-between items-start relative z-10">
+                    <div>
+                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider group-hover:text-gray-300 transition-colors">{title}</p>
+                        <h3 className="text-2xl font-bold text-white mt-1 tracking-tight">{value}</h3>
+                        {sub && <p className="text-[10px] text-gray-400 mt-1 font-medium">{sub}</p>}
+                    </div>
+                    <div className={`p-2 rounded-xl bg-white/[0.04] border border-white/10 transition-colors duration-500 group-hover:bg-white/10 shadow-inner ${iconColors[color]}`}>
+                        {Icon && <Icon size={20} />}
+                    </div>
                 </div>
             </div>
-        </div>
-    );
+        );
+    };
 
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -91,7 +137,7 @@ const NexusStats = ({ layouts, isManager }) => {
                     title="Total Project Value" 
                     value={formatCurr(totalProjectValue)} 
                     sub="Estimated Total Inventory"
-                    colorClass="border-purple-500"
+                    color="blue"
                     icon={TrendingUp}
                 />
             )}
@@ -101,7 +147,7 @@ const NexusStats = ({ layouts, isManager }) => {
                 title="Secured Revenue" 
                 value={formatCurr(totalRevenue)} 
                 sub="Sold (Full) + Booked (Part)"
-                colorClass="border-blue-500"
+                color="green"
                 icon={IndianRupee}
             />
 
@@ -110,7 +156,7 @@ const NexusStats = ({ layouts, isManager }) => {
                 title="Balance Revenue" 
                 value={formatCurr(totalProjectValue - totalRevenue)} 
                 sub="Sold (Full) + Booked (Part)"
-                colorClass="border-blue-500"
+                color="red"
                 icon={IndianRupee}
             />
 
@@ -119,7 +165,7 @@ const NexusStats = ({ layouts, isManager }) => {
                 title="Total Inventory" 
                 value={totalPlots} 
                 sub={isManager ? "Across Assigned Projects" : "Across All Projects"}
-                colorClass="border-cyan-500"
+                color="indigo"
                 icon={Layers}
             />
 
@@ -128,7 +174,7 @@ const NexusStats = ({ layouts, isManager }) => {
                 title="Sold Plots" 
                 value={totalSold} 
                 sub={`${totalPlots > 0 ? ((totalSold/totalPlots)*100).toFixed(1) : 0}% Conversion Rate`}
-                colorClass="border-green-500"
+                color="green"
                 icon={CheckCircle}
             />
 
@@ -137,7 +183,7 @@ const NexusStats = ({ layouts, isManager }) => {
                 title="Booked Plots" 
                 value={totalBooked} 
                 sub="Pending Finalization"
-                colorClass="border-yellow-500"
+                color="yellow"
                 icon={Clock}
             />
 
@@ -146,7 +192,7 @@ const NexusStats = ({ layouts, isManager }) => {
                 title="Available Plots" 
                 value={totalOpen} 
                 sub="Open for Sale"
-                colorClass="border-gray-500"
+                color="gray"
                 icon={Lock}
             />
 
@@ -155,7 +201,7 @@ const NexusStats = ({ layouts, isManager }) => {
                 title="Active Projects" 
                 value={isManager ? layouts.length : `${layouts.length} / ${limits.maxLayouts || 5}`} 
                 sub={isManager ? "Assigned Layouts" : "Layout Limit"}
-                colorClass="border-indigo-500"
+                color="cyan"
                 icon={PieChart}
             />
 
@@ -165,7 +211,7 @@ const NexusStats = ({ layouts, isManager }) => {
                     title="Plan Details" 
                     value={user?.planName || 'Active Plan'} 
                     sub={`Exp: ${expiryDateStr} • Plots: ${totalPlots}/${limits.maxPlots || 50}`}
-                    colorClass="border-red-500"
+                    color="gold"
                     icon={BarChart3}
                 />
             )}
