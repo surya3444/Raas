@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { collection, query, where, getDocs, addDoc, deleteDoc, doc, getDoc } from "firebase/firestore";
-// import { signInWithEmailAndPassword } from "firebase/auth"; // REMOVED: Using Firestore directly
-// import { auth } from '../firebase'; // REMOVED
-import { Lock, Mail, ArrowRight, Loader2, Monitor, Laptop, Smartphone, Globe, CheckCircle, AlertCircle } from 'lucide-react';
+import { Lock, Mail, ArrowRight, Loader2, Monitor, Laptop, Smartphone, Globe, CheckCircle, AlertCircle, Phone } from 'lucide-react';
 
 const LoginPage = () => {
     
@@ -11,6 +9,7 @@ const LoginPage = () => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [showForgotPassword, setShowForgotPassword] = useState(false); // NEW STATE
     
     // Session Management State
     const [showSessionManager, setShowSessionManager] = useState(false);
@@ -226,48 +225,29 @@ const LoginPage = () => {
                     <span className='text-[6px] font-bold tracking-[0.2em] text-gray-500 uppercase mt-2'>Control Every Plot. Track Every rupee. Grow Without Limits.</span>
                 </div>
 
-                {!showSessionManager ? (
-                    <form onSubmit={handleLogin} className="space-y-4">
-                        <div className="space-y-1">
-                            <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider ml-1">Email</label>
-                            <div className="relative">
-                                <Mail className="absolute left-3 top-3 text-gray-500" size={18} />
-                                <input 
-                                    type="email" 
-                                    value={email}
-                                    onChange={(e) => setEmail(e.target.value)}
-                                    className="w-full bg-black/40 border border-white/10 rounded-lg py-2.5 pl-9 pr-3 text-sm text-white focus:border-blue-600 focus:ring-1 focus:ring-blue-600 outline-none transition placeholder:text-gray-600" 
-                                    placeholder="name@company.com" 
-                                    required 
-                                />
-                            </div>
+                {/* VIEW CONTROLLER */}
+                {showForgotPassword ? (
+                    /* FORGOT PASSWORD UI */
+                    <div className="animate-in fade-in slide-in-from-bottom-4 duration-300 text-center py-2">
+                        <div className="w-12 h-12 bg-blue-500/10 text-blue-500 rounded-full flex items-center justify-center mb-4 mx-auto shadow-[0_0_15px_rgba(59,130,246,0.2)]">
+                            <Phone size={24} />
                         </div>
-                        <div className="space-y-1">
-                            <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider ml-1">Password</label>
-                            <div className="relative">
-                                <Lock className="absolute left-3 top-3 text-gray-500" size={18} />
-                                <input 
-                                    type="password" 
-                                    value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
-                                    className="w-full bg-black/40 border border-white/10 rounded-lg py-2.5 pl-9 pr-3 text-sm text-white focus:border-blue-600 focus:ring-1 focus:ring-blue-600 outline-none transition placeholder:text-gray-600" 
-                                    placeholder="••••••••" 
-                                    required 
-                                />
-                            </div>
+                        <h3 className="font-bold text-white text-lg mb-2">Forgot Password?</h3>
+                        <p className="text-xs text-gray-400 mb-6 leading-relaxed">
+                            For security reasons, password resets are handled manually. Please contact our support team at:
+                        </p>
+                        <div className="text-2xl font-black text-blue-400 tracking-widest mb-8 bg-black/40 py-4 rounded-xl border border-white/10 select-all">
+                            9071188118
                         </div>
                         <button 
-                            type="submit" 
-                            disabled={isLoading}
-                            className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg text-sm shadow-lg shadow-blue-900/20 transition flex items-center justify-center gap-2 group disabled:opacity-50"
+                            onClick={() => setShowForgotPassword(false)}
+                            className="w-full bg-white/5 hover:bg-white/10 text-white font-bold py-3 rounded-lg text-sm transition"
                         >
-                            {isLoading ? <Loader2 className="animate-spin" size={18} /> : (
-                                <><span>Sign In</span> <ArrowRight size={16} className="group-hover:translate-x-1 transition" /></>
-                            )}
+                            Back to Login
                         </button>
-                    </form>
-                ) : (
-                    /* Session Manager UI */
+                    </div>
+                ) : showSessionManager ? (
+                    /* SESSION MANAGER UI */
                     <div className="animate-in fade-in slide-in-from-bottom-4 duration-300">
                         <div className="text-center mb-4">
                             <div className="w-10 h-10 bg-orange-500/10 text-orange-500 rounded-full flex items-center justify-center mb-2 mx-auto">
@@ -316,10 +296,60 @@ const LoginPage = () => {
                             </button>
                         </div>
                     </div>
+                ) : (
+                    /* LOGIN FORM UI */
+                    <form onSubmit={handleLogin} className="space-y-4 animate-in fade-in duration-300">
+                        <div className="space-y-1">
+                            <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider ml-1">Email</label>
+                            <div className="relative">
+                                <Mail className="absolute left-3 top-3 text-gray-500" size={18} />
+                                <input 
+                                    type="email" 
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    className="w-full bg-black/40 border border-white/10 rounded-lg py-2.5 pl-9 pr-3 text-sm text-white focus:border-blue-600 focus:ring-1 focus:ring-blue-600 outline-none transition placeholder:text-gray-600" 
+                                    placeholder="name@company.com" 
+                                    required 
+                                />
+                            </div>
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider ml-1">Password</label>
+                            <div className="relative">
+                                <Lock className="absolute left-3 top-3 text-gray-500" size={18} />
+                                <input 
+                                    type="password" 
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    className="w-full bg-black/40 border border-white/10 rounded-lg py-2.5 pl-9 pr-3 text-sm text-white focus:border-blue-600 focus:ring-1 focus:ring-blue-600 outline-none transition placeholder:text-gray-600" 
+                                    placeholder="••••••••" 
+                                    required 
+                                />
+                            </div>
+                            <div className="flex justify-end pt-1">
+                                <button 
+                                    type="button" 
+                                    onClick={() => setShowForgotPassword(true)}
+                                    className="text-[10px] text-blue-400 hover:text-blue-300 font-medium transition"
+                                >
+                                    Forgot Password?
+                                </button>
+                            </div>
+                        </div>
+                        <button 
+                            type="submit" 
+                            disabled={isLoading}
+                            className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg text-sm shadow-lg shadow-blue-900/20 transition flex items-center justify-center gap-2 group disabled:opacity-50 mt-2"
+                        >
+                            {isLoading ? <Loader2 className="animate-spin" size={18} /> : (
+                                <><span>Sign In</span> <ArrowRight size={16} className="group-hover:translate-x-1 transition" /></>
+                            )}
+                        </button>
+                    </form>
                 )}
 
                 <div className="mt-8 text-center border-t border-white/5 pt-4">
-                    <p className="text-[10px] text-gray-600">Restricted Access. Authorized Personnel Only.</p>
+                    <p className="text-[10px] text-gray-600">Secure Enterprise Access. Authorized Users Only</p>
                 </div>
             </div>
         </div>
