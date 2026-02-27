@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { doc, onSnapshot, updateDoc, arrayUnion } from "firebase/firestore";
 import { db } from '../../firebase';
+import { useNexus } from '../../context/NexusContext'; // <-- ADDED IMPORT
+
 import MapCanvas from '../../components/nexus/map/MapCanvas';
 import MapToolbar from '../../components/nexus/map/MapToolbar';
 import NewElementModal from '../../components/nexus/modals/NewElementModal';
@@ -10,7 +12,9 @@ import { ArrowLeft, Ruler, Loader2, CheckCircle2 } from 'lucide-react';
 const NexusBlueprintEditor = () => {
     const { id } = useParams();
     const navigate = useNavigate();
-    const activeCollection = "layouts"; 
+    
+    // --- CRITICAL FIX: Fetch dynamic collection instead of hardcoding "layouts" ---
+    const { activeCollection } = useNexus(); 
 
     const [layout, setLayout] = useState(null);
     
@@ -21,13 +25,19 @@ const NexusBlueprintEditor = () => {
     const [pendingPoints, setPendingPoints] = useState(null); 
 
     useEffect(() => {
+        if (!activeCollection || !id) return;
+
         const unsub = onSnapshot(doc(db, activeCollection, id), (docSnap) => {
             if (docSnap.exists()) {
                 setLayout({ id: docSnap.id, ...docSnap.data() });
+            } else {
+                // --- FAILSAFE: Redirect if layout doesn't exist in current DB mode ---
+                alert("Layout not found in current Database Mode.");
+                navigate('/nexus');
             }
         });
         return () => unsub();
-    }, [id, activeCollection]);
+    }, [id, activeCollection, navigate]);
 
     // --- KEYBOARD SHORTCUTS (DELETE) ---
     useEffect(() => {
@@ -62,8 +72,9 @@ const NexusBlueprintEditor = () => {
         reader.readAsDataURL(file);
     };
 
-    const handleDrawComplete = (pointsStr) => {
-        setPendingPoints(pointsStr); 
+    // Note: MapCanvas now returns an object {points, calculatedSize}
+    const handleDrawComplete = (drawData) => {
+        setPendingPoints(drawData); 
     };
 
     const handleSaveElement = async (data) => {
@@ -71,12 +82,19 @@ const NexusBlueprintEditor = () => {
         setIsSaving(true);
         let newElement = {};
 
-        if (data.type === 'plot') {
+        // --- THE ULTIMATE FIX: Catch 'dimensions' if the modal sends that instead of 'size' ---
+        const finalSize = data.size || data.dimensions || '';
+
+        // Treat it as a plot if the type is plot, OR if it has a price/facing (failsafe)
+        if (data.type === 'plot' || data.price || data.facing) {
             newElement = {
                 id: data.id,
                 type: 'plot',
                 status: 'open',
                 points: data.points,
+                size: finalSize,             // MAGIC FIX: Safely grabs the size/dimensions
+                facing: data.facing || '',   
+                price: data.price || '',     
                 createdAt: new Date().toISOString()
             };
         } else {
@@ -100,7 +118,7 @@ const NexusBlueprintEditor = () => {
         }
         setIsSaving(false);
     };
-
+    
     // --- NEW: DELETE HANDLER ---
     const handleDeleteElement = async () => {
         if (!selectedId || !layout) return;

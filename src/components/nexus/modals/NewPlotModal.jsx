@@ -3,9 +3,15 @@ import { createPortal } from 'react-dom';
 import { X, Save, Ruler, Compass, DollarSign, Tag, PlusSquare } from 'lucide-react';
 
 const NewPlotModal = ({ points, onSave, onCancel }) => {
+    
+    // CRITICAL FIX: Since MapCanvas now returns an object {points, calculatedSize}, 
+    // we safely extract them here so the app doesn't crash and we get the auto-calculated area.
+    const pointsStr = typeof points === 'object' && points !== null ? points.points : points;
+    const autoSize = typeof points === 'object' && points !== null ? points.calculatedSize : '';
+
     const [formData, setFormData] = useState({
         id: '',
-        dimensions: '',
+        size: autoSize || '', // FIXED: Changed from 'dimensions' to 'size' to match CustomerModal
         facing: '',
         price: ''
     });
@@ -13,7 +19,19 @@ const NewPlotModal = ({ points, onSave, onCancel }) => {
     const handleSubmit = (e) => {
         e.preventDefault();
         if (!formData.id) return alert("Plot Number/ID is required");
-        onSave({ ...formData, points });
+        
+        // Assemble the perfect object that the rest of your app expects
+        const newPlotData = {
+            id: formData.id,
+            size: formData.size,
+            facing: formData.facing,
+            price: formData.price,
+            type: 'plot',        // Ensures map knows it's a plot
+            status: 'open',      // Sets default status so it colors correctly
+            points: pointsStr    // The actual SVG string
+        };
+
+        onSave(newPlotData);
     };
 
     return createPortal(
@@ -43,16 +61,16 @@ const NewPlotModal = ({ points, onSave, onCancel }) => {
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
-                        {/* Dimensions */}
+                        {/* Size / Dimensions */}
                         <div className="space-y-1">
                             <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1">
-                                <Ruler size={12}/> Dimensions
+                                <Ruler size={12}/> Size (Sq.ft)
                             </label>
                             <input 
                                 className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-xs text-white focus:border-blue-500 outline-none"
-                                placeholder="30x40"
-                                value={formData.dimensions}
-                                onChange={e => setFormData({...formData, dimensions: e.target.value})}
+                                placeholder="e.g. 1200"
+                                value={formData.size}
+                                onChange={e => setFormData({...formData, size: e.target.value})}
                             />
                         </div>
                         {/* Facing */}

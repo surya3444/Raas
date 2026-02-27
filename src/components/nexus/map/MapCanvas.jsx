@@ -92,6 +92,8 @@ const MapCanvas = ({
     const finishDrawing = () => {
         if (tool === 'pen' && penPoints.length >= 3) {
             const pointsStr = penPoints.map(p => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' ');
+            
+            // Send ONLY the string back to prevent the parent from crashing
             onDrawComplete(pointsStr); 
             cancelDrawing();
         }
@@ -133,7 +135,6 @@ const MapCanvas = ({
                 const h = Math.abs(boxStart.y - pt.y);
                 setLiveArea(w * h);
             } else if (tool === 'pen' && penPoints.length > 0) {
-                // Live preview area
                 setLiveArea(calculateArea([...penPoints, pt]));
             }
         }
@@ -148,7 +149,10 @@ const MapCanvas = ({
             if (dx > 5 && dy > 5) { 
                 const x = Math.min(boxStart.x, cursorPt.x);
                 const y = Math.min(boxStart.y, cursorPt.y);
-                onDrawComplete(`${x},${y} ${x+dx},${y} ${x+dx},${y+dy} ${x},${y+dy}`);
+                const pointsStr = `${x},${y} ${x+dx},${y} ${x+dx},${y+dy} ${x},${y+dy}`;
+                
+                // Send ONLY the string back to prevent the parent from crashing
+                onDrawComplete(pointsStr);
             }
             cancelDrawing();
         }
@@ -158,7 +162,6 @@ const MapCanvas = ({
         if (tool === 'pen') finishDrawing();
     };
 
-    // Grab the image URL correctly (handles both possible names just in case)
     const mapImageUrl = layout?.backgroundImage || layout?.bgImage;
 
     return (
@@ -172,7 +175,6 @@ const MapCanvas = ({
         >
             <div style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})`, transformOrigin: '0 0', transition: isDragging ? 'none' : 'transform 0.1s ease-out' }} className="absolute top-0 left-0">
                 
-                {/* --- CRITICAL FIX: Use mapImageUrl which checks for 'backgroundImage' --- */}
                 {mapImageUrl ? (
                     <img src={mapImageUrl} className="pointer-events-none" style={{ maxWidth: 'none' }} alt="Blueprint" /> 
                 ) : (
@@ -183,8 +185,17 @@ const MapCanvas = ({
                     
                     {/* RENDER ELEMENTS */}
                     {(layout?.elements || []).map((el, i) => {
-                        // --- SAFETY CHECK: Skip elements without points to prevent crash ---
                         if (!el.points) return null;
+
+                        // --- CRITICAL FIX: Ensure points are ALWAYS a string to prevent .split() crash ---
+                        let validPointsStr = "";
+                        if (typeof el.points === 'string') {
+                            validPointsStr = el.points;
+                        } else if (typeof el.points === 'object' && el.points.points) {
+                            validPointsStr = el.points.points; // Rescues accidentally saved objects
+                        }
+
+                        if (!validPointsStr) return null;
 
                         const isInfra = el.type === 'infra';
                         let styleClass = '';
@@ -199,13 +210,13 @@ const MapCanvas = ({
                             else styleClass = 'fill-blue-500/10 stroke-blue-400/50';
                         }
                         
-                        // Safe text positioning
-                        const firstPoint = el.points.split(' ')[0] || "0,0";
+                        // Using the safe string to calculate text position
+                        const firstPoint = validPointsStr.split(' ')[0] || "0,0";
                         const [tx, ty] = firstPoint.split(',');
 
                         return (
                             <g key={i} onClick={(e) => { if(tool === 'select') { e.stopPropagation(); onSelect(el.id); } }}>
-                                <polygon points={el.points} vectorEffect="non-scaling-stroke" className={`transition-all duration-200 ${tool === 'select' ? 'cursor-pointer hover:stroke-white hover:fill-white/20' : ''} ${styleClass} ${selectedId === el.id ? 'stroke-white stroke-[2px] fill-white/30' : 'stroke-[1px]'}`} />
+                                <polygon points={validPointsStr} vectorEffect="non-scaling-stroke" className={`transition-all duration-200 ${tool === 'select' ? 'cursor-pointer hover:stroke-white hover:fill-white/20' : ''} ${styleClass} ${selectedId === el.id ? 'stroke-white stroke-[2px] fill-white/30' : 'stroke-[1px]'}`} />
                                 {view.scale > 0.5 && <text x={tx} y={ty} fill="white" fontSize={isInfra ? "14" : "12"} fontWeight="bold" dx="4" dy="14" pointerEvents="none" style={{ textShadow: '0 1px 2px black' }}>{isInfra ? el.name : el.id}</text>}
                             </g>
                         );
@@ -222,7 +233,6 @@ const MapCanvas = ({
                             )}
                             {tool === 'pen' && penPoints.length > 0 && (
                                 <>
-                                    {/* Real-time blue fill */}
                                     <polygon points={[...penPoints, cursorPt].map(p => `${p.x},${p.y}`).join(' ')} className="fill-blue-500/20 stroke-none" />
                                     <polyline points={penPoints.map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke="#60a5fa" strokeWidth="2" vectorEffect="non-scaling-stroke" />
                                     <line x1={penPoints[penPoints.length-1].x} y1={penPoints[penPoints.length-1].y} x2={cursorPt.x} y2={cursorPt.y} stroke="#60a5fa" strokeWidth="2" strokeDasharray="5,5" vectorEffect="non-scaling-stroke" />

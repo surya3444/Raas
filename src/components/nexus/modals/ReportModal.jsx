@@ -1,34 +1,36 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Printer, FileSpreadsheet, MapPin, Wallet } from 'lucide-react';
+import { X, Printer, FileSpreadsheet, MapPin, Wallet, Filter } from 'lucide-react';
 import { useNexus } from '../../../context/NexusContext';
 
 const ReportModal = ({ layout, onClose }) => {
     const printRef = useRef();
     const { user } = useNexus();
+    
+    // --- STATE FOR FILTERING ---
+    const [reportFilter, setReportFilter] = useState('all');
 
     // --- ROBUST NAME FETCHER ---
     const getDeveloperName = () => {
-        // 1. Try Logged In User's Display Name
         if (user?.displayName) return user.displayName;
-        
-        // 2. Try Email Username (e.g., "john" from "john@example.com")
         if (user?.email) return user.email.split('@')[0];
-        
-        // 3. Try Layout Creator field (if exists in DB)
         if (layout?.createdBy) return layout.createdBy;
-
-        // 4. Professional Fallback
         return "Authorized Signatory";
     };
 
     const developerName = getDeveloperName();
 
     // 1. Filter Plots Only
-    const plots = (layout.elements || []).filter(e => e.type === 'plot');
+    const allPlots = (layout.elements || []).filter(e => e.type === 'plot');
 
-    // 2. Calculate Financials
-    const stats = plots.reduce((acc, p) => {
+    // 2. Filter Display/Export Plots based on selection
+    const displayPlots = allPlots.filter(p => {
+        if (reportFilter === 'all') return true;
+        return p.status === reportFilter;
+    });
+
+    // 3. Calculate Financials (Always based on ALL plots for the top summary)
+    const stats = allPlots.reduce((acc, p) => {
         const price = Number(p.price) || 0;
         const bookingAmt = Number(p.bookingAmount) || 0;
 
@@ -50,7 +52,7 @@ const ReportModal = ({ layout, onClose }) => {
     // Calculate Balance
     const balanceAmount = stats.totalValue - stats.realizedRevenue;
 
-    // 3. Handle Print
+    // 4. Handle Print
     const handlePrint = () => {
         const printContent = printRef.current.innerHTML;
         const originalContent = document.body.innerHTML;
@@ -60,10 +62,10 @@ const ReportModal = ({ layout, onClose }) => {
         window.location.reload(); 
     };
 
-    // 4. Handle CSV
+    // 5. Handle CSV (Uses filtered displayPlots)
     const handleExportCSV = () => {
         const headers = ["Plot ID", "Status", "Dimensions", "Facing", "Price", "Booking Amount", "Customer Name", "Phone", "Booking Date", "Purchase Date"];
-        const rows = plots.map(p => [
+        const rows = displayPlots.map(p => [
             p.id,
             p.status.toUpperCase(),
             p.dimensions || '-',
@@ -80,7 +82,11 @@ const ReportModal = ({ layout, onClose }) => {
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.setAttribute('download', `${layout.name}_Report.csv`);
+        
+        // Add filter name to the download file
+        const filterName = reportFilter === 'all' ? '' : `_${reportFilter.toUpperCase()}`;
+        link.setAttribute('download', `${layout.name}_Report${filterName}.csv`);
+        
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -97,13 +103,30 @@ const ReportModal = ({ layout, onClose }) => {
                     <h2 className="text-lg font-bold text-white flex items-center gap-2">
                         <Wallet size={20} className="text-blue-500"/> Financial Report
                     </h2>
-                    <div className="flex gap-3">
+                    <div className="flex gap-3 items-center">
+                        
+                        {/* --- NEW: FILTER SELECTOR --- */}
+                        <div className="flex items-center gap-2 mr-2 bg-black/40 border border-white/10 rounded-lg px-3 py-1.5">
+                            <Filter size={14} className="text-gray-400" />
+                            <select 
+                                className="bg-transparent text-xs font-bold text-gray-300 outline-none cursor-pointer"
+                                value={reportFilter}
+                                onChange={(e) => setReportFilter(e.target.value)}
+                            >
+                                <option className="bg-[#121214]" value="all">Include All Plots</option>
+                                <option className="bg-[#121214]" value="sold">Sold Only</option>
+                                <option className="bg-[#121214]" value="booked">Booked Only</option>
+                                <option className="bg-[#121214]" value="open">Open Only</option>
+                            </select>
+                        </div>
+
                         <button onClick={handleExportCSV} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-green-600/10 text-green-500 hover:bg-green-600 hover:text-white border border-green-600/20 transition text-xs font-bold">
                             <FileSpreadsheet size={16}/> CSV Export
                         </button>
                         <button onClick={handlePrint} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-500 transition text-xs font-bold shadow-lg shadow-blue-900/20">
                             <Printer size={16}/> Print PDF
                         </button>
+                        <div className="w-px h-6 bg-white/10 mx-1"></div>
                         <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white transition"><X size={20}/></button>
                     </div>
                 </div>
@@ -132,6 +155,12 @@ const ReportModal = ({ layout, onClose }) => {
                             <h2 className="text-xl font-bold text-gray-800">{layout.name}</h2>
                             <p className="text-sm text-gray-600 flex items-center justify-end gap-1 mt-1"><MapPin size={12}/> {layout.address || "Location"}</p>
                             <p className="text-xs text-gray-500 mt-1">Date: {new Date().toLocaleDateString()}</p>
+                            {/* Print Filter Indicator */}
+                            {reportFilter !== 'all' && (
+                                <p className="text-[10px] font-bold text-blue-600 mt-1 uppercase tracking-widest bg-blue-50 inline-block px-2 py-1 rounded">
+                                    Filtered View: {reportFilter}
+                                </p>
+                            )}
                         </div>
                     </div>
 
@@ -139,7 +168,7 @@ const ReportModal = ({ layout, onClose }) => {
                     <div className="mb-10 bg-gray-50 border border-gray-200 rounded-xl overflow-hidden">
                         <div className="bg-gray-100 px-6 py-3 border-b border-gray-200 flex justify-between items-center">
                             <h3 className="font-bold text-gray-800 uppercase tracking-wide text-sm">Project Summary Dashboard</h3>
-                            <span className="text-xs font-semibold text-gray-500">Total Plots: {plots.length} | Area: {layout.totalArea || "N/A"}</span>
+                            <span className="text-xs font-semibold text-gray-500">Total Plots: {allPlots.length} | Area: {layout.totalArea || "N/A"}</span>
                         </div>
                         
                         <div className="p-6">
@@ -154,8 +183,9 @@ const ReportModal = ({ layout, onClose }) => {
                                     <p className="text-3xl font-black text-green-700">{formatCurrency(stats.realizedRevenue)}</p>
                                 </div>
                                 <div className="border-l border-gray-200 pl-6">
-                                    <p className="text-[11px] font-bold text-orange-600 uppercase tracking-wider mb-1">Balance Amount</p>
-                                    <p className="text-3xl font-black text-orange-600">{formatCurrency(balanceAmount)}</p>
+                                    <p className="text-[11px] font-bold text-red-600 uppercase tracking-wider mb-1">Balance Amount</p>
+                                    {/* FIX: Set Balance Amount color to Red */}
+                                    <p className="text-3xl font-black text-red-600">{formatCurrency(balanceAmount)}</p>
                                 </div>
                             </div>
 
@@ -199,43 +229,51 @@ const ReportModal = ({ layout, onClose }) => {
                             </tr>
                         </thead>
                         <tbody className="text-gray-800 font-medium">
-                            {plots.map((p, i) => (
-                                <tr key={p.id} className={`border-b border-gray-100 ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
-                                    <td className="py-3 pl-3 font-bold">{p.id}</td>
-                                    <td className="py-3">
-                                        <span className={`px-2 py-1 rounded uppercase text-[9px] font-bold border ${
-                                            p.status === 'sold' ? 'bg-green-100 text-green-800 border-green-200' : 
-                                            p.status === 'booked' ? 'bg-yellow-100 text-yellow-800 border-yellow-200' : 
-                                            'bg-gray-100 text-gray-600 border-gray-200'
-                                        }`}>
-                                            {p.status}
-                                        </span>
-                                    </td>
-                                    <td className="py-3">
-                                        <div>
-                                            <p className="text-black font-bold">{p.customerName || '-'}</p>
-                                            {p.customerPhone && <p className="text-[10px] text-gray-500">{p.customerPhone}</p>}
-                                        </div>
-                                    </td>
-                                    <td className="py-3 text-right">{p.price ? formatCurrency(p.price) : '-'}</td>
-                                    <td className="py-3 text-right font-mono font-bold text-gray-700">
-                                        {p.status === 'sold' ? formatCurrency(p.price) : (p.bookingAmount ? formatCurrency(p.bookingAmount) : '-')}
-                                    </td>
-                                    <td className="py-3 pr-3 text-right">
-                                        {p.status === 'sold' && p.purchaseDate ? (
-                                            <div>
-                                                <p className="font-bold">{new Date(p.purchaseDate).toLocaleDateString()}</p>
-                                                <p className="text-[9px] text-gray-400 uppercase">Purchased</p>
-                                            </div>
-                                        ) : p.status === 'booked' && p.bookingDate ? (
-                                            <div>
-                                                <p className="font-bold text-yellow-700">{new Date(p.bookingDate).toLocaleDateString()}</p>
-                                                <p className="text-[9px] text-gray-400 uppercase">Booked On</p>
-                                            </div>
-                                        ) : '-'}
+                            {displayPlots.length === 0 ? (
+                                <tr>
+                                    <td colSpan="6" className="py-8 text-center text-gray-500 italic border-b border-gray-100">
+                                        No plots found for the selected filter.
                                     </td>
                                 </tr>
-                            ))}
+                            ) : (
+                                displayPlots.map((p, i) => (
+                                    <tr key={p.id} className={`border-b border-gray-100 ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
+                                        <td className="py-3 pl-3 font-bold">{p.id}</td>
+                                        <td className="py-3">
+                                            <span className={`px-2 py-1 rounded uppercase text-[9px] font-bold border ${
+                                                p.status === 'sold' ? 'bg-green-100 text-green-800 border-green-200' : 
+                                                p.status === 'booked' ? 'bg-yellow-100 text-yellow-800 border-yellow-200' : 
+                                                'bg-gray-100 text-gray-600 border-gray-200'
+                                            }`}>
+                                                {p.status}
+                                            </span>
+                                        </td>
+                                        <td className="py-3">
+                                            <div>
+                                                <p className="text-black font-bold">{p.customerName || '-'}</p>
+                                                {p.customerPhone && <p className="text-[10px] text-gray-500">{p.customerPhone}</p>}
+                                            </div>
+                                        </td>
+                                        <td className="py-3 text-right">{p.price ? formatCurrency(p.price) : '-'}</td>
+                                        <td className="py-3 text-right font-mono font-bold text-gray-700">
+                                            {p.status === 'sold' ? formatCurrency(p.price) : (p.bookingAmount ? formatCurrency(p.bookingAmount) : '-')}
+                                        </td>
+                                        <td className="py-3 pr-3 text-right">
+                                            {p.status === 'sold' && p.purchaseDate ? (
+                                                <div>
+                                                    <p className="font-bold">{new Date(p.purchaseDate).toLocaleDateString()}</p>
+                                                    <p className="text-[9px] text-gray-400 uppercase">Purchased</p>
+                                                </div>
+                                            ) : p.status === 'booked' && p.bookingDate ? (
+                                                <div>
+                                                    <p className="font-bold text-yellow-700">{new Date(p.bookingDate).toLocaleDateString()}</p>
+                                                    <p className="text-[9px] text-gray-400 uppercase">Booked On</p>
+                                                </div>
+                                            ) : '-'}
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
                         </tbody>
                     </table>
 

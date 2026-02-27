@@ -87,6 +87,7 @@ const NexusLayoutViewer = () => {
     const [selectedId, setSelectedId] = useState(null);
     const [viewConfig, setViewConfig] = useState({ scale: 1, x: 0, y: 0 });
     const [searchTerm, setSearchTerm] = useState('');
+    const [filterStatus, setFilterStatus] = useState('all'); // NEW: Registry Filter State
     const [isFullScreen, setIsFullScreen] = useState(false);
     
     // Public/Shared Mode State
@@ -98,7 +99,10 @@ const NexusLayoutViewer = () => {
     const [mobileTab, setMobileTab] = useState('dashboard'); // Default to dashboard
 
     useEffect(() => {
-        const unsub = onSnapshot(doc(db, activeCollection, id), (docSnap) => {
+        // --- CRITICAL PUBLIC FIX: Always fallback to "layouts" collection if no user is active ---
+        const collectionToUse = activeCollection || 'layouts'; 
+
+        const unsub = onSnapshot(doc(db, collectionToUse, id), (docSnap) => {
             if (docSnap.exists()) {
                 setLayout({ id: docSnap.id, ...docSnap.data() });
             }
@@ -108,15 +112,19 @@ const NexusLayoutViewer = () => {
         return () => { unsub(); window.removeEventListener('keydown', handleEsc); };
     }, [id, activeCollection]);
 
+    // --- CRITICAL PUBLIC ENFORCEMENT ---
     useEffect(() => {
         const focusId = searchParams.get('focus');
         const mode = searchParams.get('mode');
         const priceParam = searchParams.get('price');
 
-        if (mode === 'public') {
+        // FORCE Public Mode if there is no logged-in user OR if mode=public is in URL
+        if (mode === 'public' || !user) {
             setIsPublicMode(true);
             setIsFullScreen(true); 
             if (priceParam === 'false') setShowPublicPrice(false);
+        } else {
+            setIsPublicMode(false);
         }
 
         if (focusId && layout && layout.elements) {
@@ -140,9 +148,8 @@ const NexusLayoutViewer = () => {
                 setMobileTab('map');
             }
         }
-    }, [searchParams, layout]);
+    }, [searchParams, layout, user]);
 
-    // --- CRITICAL FIX: Memoize grid layout object to prevent infinite re-render loops in child components ---
     const memoizedGridLayout = useMemo(() => {
         if (!layout) return null;
         return {
@@ -151,20 +158,23 @@ const NexusLayoutViewer = () => {
         };
     }, [layout]);
 
-    // --- ACTIONS ---
+    // --- ACTIONS (SECURE & GUARDED) ---
     const exitPreviewMode = () => {
+        // Prevent real public users from escaping fullscreen/preview mode
+        if (!user) return; 
         setIsPublicMode(false);
         setIsFullScreen(false);
         window.history.replaceState(null, '', `/nexus/view/${id}`);
     };
 
     const handlePlotUpdate = async (updatedPlot) => {
-        if (isPublicMode) return; 
+        if (isPublicMode || !user) return; 
         const updatedElements = layout.elements.map(e => e.id === updatedPlot.id ? updatedPlot : e);
         await updateDoc(doc(db, activeCollection, id), { elements: updatedElements });
     };
 
     const handleSaveExpenses = async (expenseData) => {
+        if (isPublicMode || !user) return; 
         try {
             const updatePayload = {
                 expenses: expenseData.expenses,
@@ -185,7 +195,6 @@ const NexusLayoutViewer = () => {
         }
     };
 
-    // --- HELPER: Convert Sqft to Acres ---
     const getFormattedArea = () => {
         if (!layout?.totalArea) return null;
         let areaStr = layout.totalArea.toString().toLowerCase();
@@ -199,6 +208,7 @@ const NexusLayoutViewer = () => {
     };
 
     const addMilestone = async () => {
+        if (isPublicMode || !user) return; 
         const title = prompt("Enter Milestone Name:");
         if (!title) return;
         const newM = { title, done: false, date: new Date().toISOString() };
@@ -206,12 +216,14 @@ const NexusLayoutViewer = () => {
     };
 
     const toggleMilestone = async (idx) => {
+        if (isPublicMode || !user) return; 
         const updated = [...(layout.milestones || [])];
         updated[idx].done = !updated[idx].done;
         await updateDoc(doc(db, activeCollection, id), { milestones: updated });
     };
 
     const deleteMilestone = async (idx) => {
+        if (isPublicMode || !user) return; 
         if(!confirm("Delete milestone?")) return;
         const updated = layout.milestones.filter((_, i) => i !== idx);
         await updateDoc(doc(db, activeCollection, id), { milestones: updated });
@@ -263,9 +275,9 @@ const NexusLayoutViewer = () => {
 
     const customers = isPublicMode ? [] : plots
         .filter(e => e.status === 'sold' || e.status === 'booked')
+        .filter(e => filterStatus === 'all' || e.status === filterStatus)
         .filter(e => (e.customerName?.toLowerCase() || '').includes(searchTerm.toLowerCase()) || e.id.toLowerCase().includes(searchTerm.toLowerCase()));
 
-    // CRITICAL FIX: Converted from Component to regular function rendering to stop React unmount/remounting
     const renderDashboardSection = () => (
         <div className="flex flex-col p-4 md:p-8 space-y-8 bg-gradient-to-b from-[#09090b] via-[#050505] to-black">
             
@@ -296,9 +308,9 @@ const NexusLayoutViewer = () => {
                         {/* AREA (Editable) */}
                         {getFormattedArea() && (
                             <div 
-                                className="flex items-center gap-2 border-l border-white/10 pl-4 group/area cursor-pointer hover:text-white transition"
+                                className={`flex items-center gap-2 border-l border-white/10 pl-4 ${!isPublicMode ? 'cursor-pointer hover:text-white group/area' : ''}`}
                                 onClick={() => !isPublicMode && setActiveModal('expense')}
-                                title="Click to Edit Area"
+                                title={!isPublicMode ? "Click to Edit Area" : undefined}
                             >
                                 <Ruler size={12} className="text-purple-500"/> 
                                 <span>{getFormattedArea()}</span>
@@ -309,18 +321,20 @@ const NexusLayoutViewer = () => {
                         {layout.addressLink && <a href={layout.addressLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 border-l border-white/10 pl-4 hover:text-blue-400 transition cursor-pointer"><ExternalLink size={12} className="text-blue-500"/> View Map</a>}
                     </div>
                 </div>
-                <div className="relative z-10 flex gap-3">
-                    <button onClick={() => setActiveModal('report')} className="group flex items-center gap-2 px-5 py-3 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.05] hover:border-white/[0.1] transition-all duration-300">
-                        <Printer size={16} className="text-slate-400 group-hover:text-white"/>
-                        <span className="text-xs font-bold text-slate-300 group-hover:text-white">Export Report</span>
-                    </button>
-                </div>
+                {!isPublicMode && (
+                    <div className="relative z-10 flex gap-3">
+                        <button onClick={() => setActiveModal('report')} className="group flex items-center gap-2 px-5 py-3 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.05] hover:border-white/[0.1] transition-all duration-300">
+                            <Printer size={16} className="text-slate-400 group-hover:text-white"/>
+                            <span className="text-xs font-bold text-slate-300 group-hover:text-white">Export Report</span>
+                        </button>
+                    </div>
+                )}
             </div>
 
             {/* Metrics Grid */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <StatsCard title="Revenue" value={`₹${(revenue/100000).toFixed(2)}L`} sub="Sold + Booking Amts" icon={DollarSign} color="green" isPublicMode={isPublicMode} />
                 <StatsCard title="Project Value" value={`₹${(totalValue/10000000).toFixed(2)}Cr`} sub="Potential Worth" icon={TrendingUp} color="amber" isPublicMode={isPublicMode} />
+                <StatsCard title="Revenue" value={`₹${(revenue/100000).toFixed(2)}L`} sub="Sold + Booking Amts" icon={DollarSign} color="green" isPublicMode={isPublicMode} />
                 <StatsCard title="Balance Value" value={`₹${((totalValue - revenue)/10000000).toFixed(2)}Cr`} sub="Potential Worth" icon={TrendingUp} color="amber" isPublicMode={isPublicMode} />
 
                 {/* Expenses Card */}
@@ -328,7 +342,7 @@ const NexusLayoutViewer = () => {
                     <StatsCard 
                         title="Expenses" 
                         value={`₹${layout.costPerSqft}/sqft`} 
-                        sub={`Total: ₹${(layout.totalProjectCost/10000000).toFixed(2)}Cr`} 
+                        sub={!isPublicMode ? `Total: ₹${(layout.totalProjectCost/10000000).toFixed(2)}Cr` : ''} 
                         icon={Calculator} 
                         color="orange" 
                         isPublicMode={isPublicMode}
@@ -338,7 +352,7 @@ const NexusLayoutViewer = () => {
                     <StatsCard 
                         title="Expenses" 
                         isPublicMode={isPublicMode}
-                        action={<button onClick={(e) => {e.stopPropagation(); setActiveModal('expense');}} className="w-full bg-orange-600/20 text-orange-500 border border-orange-500/50 hover:bg-orange-600 hover:text-white py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition animate-pulse z-20 relative cursor-pointer"><Calculator size={14}/> Calculate Now</button>} 
+                        action={!isPublicMode ? <button onClick={(e) => {e.stopPropagation(); setActiveModal('expense');}} className="w-full bg-orange-600/20 text-orange-500 border border-orange-500/50 hover:bg-orange-600 hover:text-white py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition animate-pulse z-20 relative cursor-pointer"><Calculator size={14}/> Calculate Now</button> : <span className="text-sm font-bold text-gray-500">Not Disclosed</span>} 
                         sub="Set Costs" 
                         icon={Calculator} 
                         color="orange" 
@@ -366,15 +380,15 @@ const NexusLayoutViewer = () => {
                 <div className="flex flex-col rounded-3xl border border-white/[0.08] bg-white/[0.02] backdrop-blur-xl p-6 min-h-[300px]">
                     <div className="flex justify-between items-center mb-6">
                         <h3 className="text-xs font-bold text-slate-300 uppercase flex items-center gap-2 tracking-widest"><Calendar size={14} className="text-blue-500"/> Milestones</h3>
-                        <button onClick={addMilestone} className="text-[10px] bg-blue-500/10 text-blue-400 px-3 py-1.5 rounded-full hover:bg-blue-500 hover:text-white transition flex items-center gap-1 font-bold"><Plus size={12}/> New</button>
+                        {!isPublicMode && <button onClick={addMilestone} className="text-[10px] bg-blue-500/10 text-blue-400 px-3 py-1.5 rounded-full hover:bg-blue-500 hover:text-white transition flex items-center gap-1 font-bold"><Plus size={12}/> New</button>}
                     </div>
                     <div className="space-y-3 flex-1">
                         {(layout.milestones || []).length === 0 ? <p className="text-xs text-slate-600 italic text-center py-10">No active milestones.</p> : (
                             (layout.milestones || []).map((m, i) => (
                                 <div key={i} className="flex items-center gap-4 p-4 rounded-2xl bg-black/20 border border-white/[0.03] hover:border-white/[0.1] hover:bg-white/[0.02] transition group">
-                                    <button onClick={() => toggleMilestone(i)} className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${m.done ? 'bg-emerald-500 border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.3)]' : 'border-slate-700 hover:border-blue-500'}`}>{m.done && <div className="w-2 h-2 bg-black rounded-full"></div>}</button>
+                                    <button onClick={() => toggleMilestone(i)} disabled={isPublicMode} className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${m.done ? 'bg-emerald-500 border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.3)]' : 'border-slate-700 hover:border-blue-500'} ${isPublicMode ? 'cursor-default pointer-events-none' : ''}`}>{m.done && <div className="w-2 h-2 bg-black rounded-full"></div>}</button>
                                     <span className={`text-xs flex-1 font-medium ${m.done ? 'text-slate-600 line-through' : 'text-slate-200'}`}>{m.title}</span>
-                                    <button onClick={() => deleteMilestone(i)} className="text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition p-2"><Trash2 size={14}/></button>
+                                    {!isPublicMode && <button onClick={() => deleteMilestone(i)} className="text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition p-2"><Trash2 size={14}/></button>}
                                 </div>
                             ))
                         )}
@@ -384,7 +398,7 @@ const NexusLayoutViewer = () => {
                 <div className="flex flex-col rounded-3xl border border-white/[0.08] bg-white/[0.02] backdrop-blur-xl p-6 min-h-[300px]">
                     <div className="flex justify-between items-center mb-6">
                         <h3 className="text-xs font-bold text-slate-300 uppercase flex items-center gap-2 tracking-widest"><FileText size={14} className="text-purple-500"/> Project Files</h3>
-                        <button onClick={() => setActiveModal('settings')} className="text-[10px] text-slate-500 hover:text-white font-medium hover:underline">Manage All</button>
+                        {!isPublicMode && <button onClick={() => setActiveModal('settings')} className="text-[10px] text-slate-500 hover:text-white font-medium hover:underline">Manage All</button>}
                     </div>
                     <div className="space-y-3 flex-1">
                         {(layout.docs || []).length === 0 ? <p className="text-xs text-slate-600 italic text-center py-10">No documents uploaded.</p> : (
@@ -418,7 +432,7 @@ const NexusLayoutViewer = () => {
             <div className="flex flex-col w-full h-full bg-[#09090b]/80 backdrop-blur-2xl shadow-[0_0_100px_rgba(0,0,0,0.5)] overflow-hidden relative z-10">
 
                 {!isFullScreen && (
-                    <NexusNavbar title={layout.name} isEditor={true} onViewChange={setViewMode} currentView={viewMode} />
+                    <NexusNavbar title={layout.name} isEditor={false} /> 
                 )}
 
                 {isPublicMode && user && (
@@ -439,11 +453,34 @@ const NexusLayoutViewer = () => {
                              {renderDashboardSection()}
                         </div>
 
+                        {/* --- MAP/GRID TOGGLE --- */}
+                        <div className={`
+                            px-4 py-2 flex justify-between items-center
+                            ${mobileTab === 'map' ? 'flex' : 'hidden md:flex'} 
+                            ${isFullScreen ? 'hidden' : ''}
+                        `}>
+                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-2">Inventory View</h3>
+                            <div className="flex bg-white/5 p-1 rounded-lg border border-white/10">
+                                <button 
+                                    onClick={() => setViewMode('map')} 
+                                    className={`flex items-center gap-2 px-4 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'map' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+                                >
+                                    <MapIcon size={14}/> Map
+                                </button>
+                                <button 
+                                    onClick={() => setViewMode('grid')} 
+                                    className={`flex items-center gap-2 px-4 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'grid' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+                                >
+                                    <Grid size={14}/> Grid
+                                </button>
+                            </div>
+                        </div>
+
                         {/* B. MAP/GRID VIEW (BOTTOM) */}
                         <div className={`
                             relative flex-col 
                             ${mobileTab === 'map' ? 'flex h-full' : 'hidden md:flex'} 
-                            ${isFullScreen ? 'h-full flex-1 p-0' : 'md:h-[65vh] md:shrink-0 md:p-4 md:mb-8'} 
+                            ${isFullScreen ? 'h-full flex-1 p-0' : 'md:h-[65vh] md:shrink-0 md:px-4 md:pb-8'} 
                         `}>
                             {/* Map Container */}
                             <div className={`
@@ -502,16 +539,35 @@ const NexusLayoutViewer = () => {
                                     />
                                 ) : (
                                     !isPublicMode && (
-                                        <div className="space-y-3">
-                                            {customers.map(c => (
-                                                <div key={c.id} onClick={() => setSelectedId(c.id)} className="bg-white/5 border border-white/5 p-4 rounded-xl flex justify-between items-center">
-                                                    <div>
-                                                        <span className="text-[10px] font-bold text-blue-400 bg-blue-500/10 px-2 py-1 rounded mb-1 inline-block">#{c.id}</span>
-                                                        <h4 className="text-sm font-bold text-white">{c.customerName}</h4>
-                                                    </div>
-                                                    <ChevronRight size={16} className="text-gray-600"/>
+                                        <div className="space-y-4">
+                                            {/* Mobile Registry Search & Filter */}
+                                            <div className="space-y-3 mb-2">
+                                                <div className="relative">
+                                                    <Search className="absolute left-3 top-3 text-gray-500" size={14} />
+                                                    <input type="text" placeholder="Search..." className="w-full bg-[#18181b] border border-white/10 rounded-lg py-2.5 pl-9 pr-3 text-xs text-white focus:border-blue-500 outline-none transition" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}/>
                                                 </div>
-                                            ))}
+                                                <div className="flex bg-[#18181b] rounded-lg p-1 border border-white/10">
+                                                    <button onClick={() => setFilterStatus('all')} className={`flex-1 text-[10px] font-bold py-1.5 rounded-md transition ${filterStatus === 'all' ? 'bg-white/10 text-white' : 'text-gray-500 hover:text-gray-300'}`}>All</button>
+                                                    <button onClick={() => setFilterStatus('booked')} className={`flex-1 text-[10px] font-bold py-1.5 rounded-md transition ${filterStatus === 'booked' ? 'bg-yellow-500/20 text-yellow-500' : 'text-gray-500 hover:text-gray-300'}`}>Booked</button>
+                                                    <button onClick={() => setFilterStatus('sold')} className={`flex-1 text-[10px] font-bold py-1.5 rounded-md transition ${filterStatus === 'sold' ? 'bg-green-500/20 text-green-500' : 'text-gray-500 hover:text-gray-300'}`}>Sold</button>
+                                                </div>
+                                            </div>
+
+                                            <div className="space-y-3">
+                                                {customers.map(c => (
+                                                    <div key={c.id} onClick={() => setSelectedId(c.id)} className="bg-white/5 border border-white/5 p-4 rounded-xl flex justify-between items-center">
+                                                        <div>
+                                                            <div className="flex items-center gap-2 mb-1">
+                                                                <span className="text-[10px] font-bold text-blue-400 bg-blue-500/10 px-2 py-1 rounded">#{c.id}</span>
+                                                                <span className={`text-[9px] uppercase font-bold px-2 py-0.5 rounded-md ${c.status === 'sold' ? 'text-green-400 bg-green-500/10' : 'text-yellow-400 bg-yellow-500/10'}`}>{c.status}</span>
+                                                            </div>
+                                                            <h4 className="text-sm font-bold text-white">{c.customerName || "Unknown Owner"}</h4>
+                                                        </div>
+                                                        <ChevronRight size={16} className="text-gray-600"/>
+                                                    </div>
+                                                ))}
+                                                {customers.length === 0 && <div className="text-center text-xs text-gray-500 py-6 border border-white/5 rounded-xl border-dashed">No customers found.</div>}
+                                            </div>
                                         </div>
                                     )
                                 )}
@@ -524,11 +580,22 @@ const NexusLayoutViewer = () => {
                         <div className="w-[380px] flex-shrink-0 bg-[#0a0a0a]/95 backdrop-blur-2xl border-l border-white/[0.08] hidden md:flex flex-col z-20 h-full shadow-[0_0_50px_rgba(0,0,0,0.5)]">
                             {!isPublicMode && (
                                 <div className="p-6 border-b border-white/[0.08]">
-                                    <div className="flex justify-between items-center mb-6">
+                                    <div className="flex justify-between items-center mb-4">
                                         <h2 className="text-sm font-bold text-white uppercase tracking-widest flex items-center gap-2"><Users size={16} className="text-blue-500"/> Registry</h2>
                                         <button onClick={() => setActiveModal('settings')} className="text-gray-500 hover:text-white transition"><Settings size={16}/></button>
                                     </div>
-                                    <div className="relative mt-4"><Search className="absolute left-3 top-3 text-gray-500" size={14} /><input type="text" placeholder="Search..." className="w-full bg-[#18181b] border border-white/10 rounded-lg py-2.5 pl-9 pr-3 text-xs text-white focus:border-blue-500 outline-none transition" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}/></div>
+                                    <div className="space-y-3">
+                                        <div className="relative">
+                                            <Search className="absolute left-3 top-3 text-gray-500" size={14} />
+                                            <input type="text" placeholder="Search..." className="w-full bg-[#18181b] border border-white/10 rounded-lg py-2.5 pl-9 pr-3 text-xs text-white focus:border-blue-500 outline-none transition" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}/>
+                                        </div>
+                                        {/* Desktop Registry Filter */}
+                                        <div className="flex bg-[#18181b] rounded-lg p-1 border border-white/10">
+                                            <button onClick={() => setFilterStatus('all')} className={`flex-1 text-[10px] font-bold py-1.5 rounded-md transition ${filterStatus === 'all' ? 'bg-white/10 text-white' : 'text-gray-500 hover:text-gray-300'}`}>All</button>
+                                            <button onClick={() => setFilterStatus('booked')} className={`flex-1 text-[10px] font-bold py-1.5 rounded-md transition ${filterStatus === 'booked' ? 'bg-yellow-500/20 text-yellow-500' : 'text-gray-500 hover:text-gray-300'}`}>Booked</button>
+                                            <button onClick={() => setFilterStatus('sold')} className={`flex-1 text-[10px] font-bold py-1.5 rounded-md transition ${filterStatus === 'sold' ? 'bg-green-500/20 text-green-500' : 'text-gray-500 hover:text-gray-300'}`}>Sold</button>
+                                        </div>
+                                    </div>
                                 </div>
                             )}
                             <div className="flex-1 overflow-y-auto custom-scrollbar bg-[#0e0e10] p-4">
@@ -561,6 +628,7 @@ const NexusLayoutViewer = () => {
                                                     </div>
                                                 </div>
                                             ))}
+                                            {customers.length === 0 && <div className="text-center text-xs text-gray-500 py-10 border border-white/5 rounded-xl border-dashed">No customers found.</div>}
                                         </div>
                                     )
                                 )}

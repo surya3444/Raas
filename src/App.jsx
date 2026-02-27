@@ -39,15 +39,9 @@ const ProtectedRoute = ({ user, allowedRoles, children }) => {
 
     // 2. Check Role Access
     if (!allowedRoles.includes(user.role)) {
-        // If unauthorized, redirect to their appropriate home
-        if (user.role === 'admin') {
-            return <Navigate to="/admin" replace />;
-        } else if (user.role === 'developer' || user.role === 'manager') { // Added manager here
-            // Default to Nexus for developers and managers
-            return <Navigate to="/nexus" replace />;
-        } else {
-            return <Navigate to="/" replace />;
-        }
+        if (user.role === 'admin') return <Navigate to="/admin" replace />;
+        if (user.role === 'developer' || user.role === 'manager') return <Navigate to="/nexus" replace />;
+        return <Navigate to="/" replace />;
     }
 
     // 3. Allow Access
@@ -55,7 +49,6 @@ const ProtectedRoute = ({ user, allowedRoles, children }) => {
 };
 
 const App = () => {
-    // Retrieve user
     const user = JSON.parse(localStorage.getItem('rajchavin_user') || 'null');
 
     return (
@@ -77,7 +70,6 @@ const App = () => {
 
                 {/* 3. DEVELOPER ROUTES (STATIC MODE) */}
                 <Route path="/static" element={
-                    // Added 'manager'
                     <ProtectedRoute user={user} allowedRoles={['developer', 'admin', 'manager']}>
                         <DeveloperLayout />
                     </ProtectedRoute>
@@ -88,7 +80,6 @@ const App = () => {
 
                 {/* 4. DEVELOPER ROUTES (INTERACTIVE MODE) */}
                 <Route path="/interactive" element={
-                    // Added 'manager'
                     <ProtectedRoute user={user} allowedRoles={['developer', 'admin', 'manager']}>
                         <DeveloperLayout />
                     </ProtectedRoute>
@@ -97,22 +88,28 @@ const App = () => {
                     <Route path="layout/:id" element={<InteractiveLayoutPage />} />
                 </Route>
 
-                {/* 5. NEXUS ROUTES (ADVANCED MODE) */}
+                {/* 5. NEXUS ROUTES (MIXED PUBLIC/PRIVATE) */}
                 <Route path="/nexus/*" element={
-                    // Added 'manager' so they don't get booted out!
-                    <ProtectedRoute user={user} allowedRoles={['developer', 'admin', 'manager']}>
-                        <NexusProvider user={user}>
-                            <Routes>
-                                <Route index element={<NexusDashboard />} />
-                                <Route path="view/:id" element={<NexusLayoutViewer />} />
-                                <Route path="design/:id" element={<NexusBlueprintEditor />} />
-                                <Route path="editor/:id" element={<Navigate to="../view/:id" replace />} />
-                            </Routes>
-                        </NexusProvider>
-                    </ProtectedRoute>
+                    <NexusProvider user={user}>
+                        <Routes>
+                            {/* 🔓 PUBLIC ROUTE: Layout Viewer (Bypasses ProtectedRoute) */}
+                            <Route path="view/:id" element={<NexusLayoutViewer />} />
+
+                            {/* 🔒 PROTECTED ROUTES: Dashboard & Editor */}
+                            <Route path="*" element={
+                                <ProtectedRoute user={user} allowedRoles={['developer', 'admin', 'manager']}>
+                                    <Routes>
+                                        <Route index element={<NexusDashboard />} />
+                                        <Route path="design/:id" element={<NexusBlueprintEditor />} />
+                                        <Route path="editor/:id" element={<Navigate to="../view/:id" replace />} />
+                                    </Routes>
+                                </ProtectedRoute>
+                            } />
+                        </Routes>
+                    </NexusProvider>
                 } />
 
-                {/* 6. CATCH-ALL (Redirect based on role if logged in, else Login) */}
+                {/* 6. CATCH-ALL */}
                 <Route path="*" element={
                     user ? (
                         user.role === 'admin' ? <Navigate to="/admin" replace /> : <Navigate to="/nexus" replace />
