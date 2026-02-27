@@ -90,11 +90,6 @@ const InteractiveLayoutPage = () => {
                     >
                         <FileText size={12} /> Reports
                     </button>
-
-                    <div className="flex bg-black/40 rounded-lg p-1 border border-white/10">
-                        <button onClick={() => setViewMode('grid')} className={`px-3 py-1 rounded text-[10px] font-bold flex items-center gap-1 transition ${viewMode === 'grid' ? 'bg-brand text-white' : 'text-gray-400 hover:text-white'}`}><Grid size={12} /> Grid</button>
-                        <button onClick={() => setViewMode('map')} className={`px-3 py-1 rounded text-[10px] font-bold flex items-center gap-1 transition ${viewMode === 'map' ? 'bg-brand text-white' : 'text-gray-400 hover:text-white'}`}><MapIcon size={12} /> Map</button>
-                    </div>
                 </div>
             </div>
 
@@ -195,8 +190,27 @@ const InteractiveLayoutPage = () => {
 
                     </div>
 
+                    {/* --- MAP/GRID TOGGLE --- */}
+                    <div className="px-6 py-4 flex justify-between items-center border-t border-white/10 bg-[#09090b]">
+                        <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Inventory View</h3>
+                        <div className="flex bg-white/5 p-1 rounded-lg border border-white/10">
+                            <button 
+                                onClick={() => setViewMode('grid')} 
+                                className={`flex items-center gap-2 px-4 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'grid' ? 'bg-brand text-white shadow-lg' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
+                            >
+                                <Grid size={14}/> Grid
+                            </button>
+                            <button 
+                                onClick={() => setViewMode('map')} 
+                                className={`flex items-center gap-2 px-4 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'map' ? 'bg-brand text-white shadow-lg' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
+                            >
+                                <MapIcon size={14}/> Map
+                            </button>
+                        </div>
+                    </div>
+
                     {/* VISUALIZER (MOVED TO BOTTOM) */}
-                    <div className="min-h-[600px] flex-1 flex flex-col border-t border-white/10 relative shrink-0">
+                    <div className="min-h-[600px] flex-1 flex flex-col relative shrink-0">
                         {viewMode === 'grid' ? <InteractiveGrid layout={layout} /> : <InteractiveMap layout={layout} />}
                     </div>
                 </div>

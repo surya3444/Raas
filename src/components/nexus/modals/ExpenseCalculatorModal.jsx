@@ -2,10 +2,30 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Calculator, IndianRupee, Save, PieChart, Ruler, Plus, Trash2, ArrowRight } from 'lucide-react';
 
+// --- UTILITY: Convert Number to Words (Indian Format) ---
+const numberToWords = (num) => {
+    const val = Number(num);
+    if (!val || isNaN(val) || val === 0) return '';
+    
+    const a = ['', 'one ', 'two ', 'three ', 'four ', 'five ', 'six ', 'seven ', 'eight ', 'nine ', 'ten ', 'eleven ', 'twelve ', 'thirteen ', 'fourteen ', 'fifteen ', 'sixteen ', 'seventeen ', 'eighteen ', 'nineteen '];
+    const b = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
+
+    const n = ('000000000' + val).substr(-9).match(/^(\d{2})(\d{2})(\d{2})(\d{1})(\d{2})$/);
+    if (!n) return '';
+
+    let str = '';
+    str += (n[1] != 0) ? (a[Number(n[1])] || b[n[1][0]] + ' ' + a[n[1][1]]) + 'crore ' : '';
+    str += (n[2] != 0) ? (a[Number(n[2])] || b[n[2][0]] + ' ' + a[n[2][1]]) + 'lakh ' : '';
+    str += (n[3] != 0) ? (a[Number(n[3])] || b[n[3][0]] + ' ' + a[n[3][1]]) + 'thousand ' : '';
+    str += (n[4] != 0) ? (a[Number(n[4])] || b[n[4][0]] + ' ' + a[n[4][1]]) + 'hundred ' : '';
+    str += (n[5] != 0) ? ((str != '') ? 'and ' : '') + (a[Number(n[5])] || b[n[5][0]] + ' ' + a[n[5][1]]) : '';
+
+    return str ? str.trim() + ' only' : '';
+};
+
 const ExpenseCalculatorModal = ({ layout, onSave, onClose }) => {
     
     // --- INTELLIGENT AREA PARSER ---
-    // Converts strings like "2 Acres 10 Guntas" or "5 Hectares" directly into total Sq.Ft.
     const parseAreaToSqft = (areaStr) => {
         if (!areaStr) return 0;
         if (typeof areaStr === 'number') return areaStr;
@@ -14,58 +34,32 @@ const ExpenseCalculatorModal = ({ layout, onSave, onClose }) => {
         let totalSqft = 0;
         let matched = false;
 
-        // 1 Acre = 43,560 sq ft
         const acresMatch = str.match(/([\d.]+)\s*acre/);
-        if (acresMatch) {
-            totalSqft += parseFloat(acresMatch[1]) * 43560;
-            matched = true;
-        }
+        if (acresMatch) { totalSqft += parseFloat(acresMatch[1]) * 43560; matched = true; }
 
-        // 1 Gunta = 1,089 sq ft
         const guntasMatch = str.match(/([\d.]+)\s*gunta/);
-        if (guntasMatch) {
-            totalSqft += parseFloat(guntasMatch[1]) * 1089;
-            matched = true;
-        }
+        if (guntasMatch) { totalSqft += parseFloat(guntasMatch[1]) * 1089; matched = true; }
 
-        // 1 Hectare = 107,639.1 sq ft
         const hectaresMatch = str.match(/([\d.]+)\s*hectare/);
-        if (hectaresMatch) {
-            totalSqft += parseFloat(hectaresMatch[1]) * 107639.1;
-            matched = true;
-        }
+        if (hectaresMatch) { totalSqft += parseFloat(hectaresMatch[1]) * 107639.1; matched = true; }
 
-        // 1 Sq.Yard = 9 sq ft
         const sqYardsMatch = str.match(/([\d.]+)\s*sq\.?yard/);
-        if (sqYardsMatch) {
-            totalSqft += parseFloat(sqYardsMatch[1]) * 9;
-            matched = true;
-        }
+        if (sqYardsMatch) { totalSqft += parseFloat(sqYardsMatch[1]) * 9; matched = true; }
 
-        // Sq.Ft.
         const sqFtMatch = str.match(/([\d.]+)\s*sq\.?ft/);
-        if (sqFtMatch) {
-            totalSqft += parseFloat(sqFtMatch[1]);
-            matched = true;
-        }
+        if (sqFtMatch) { totalSqft += parseFloat(sqFtMatch[1]); matched = true; }
 
-        // If we found specific units, return the calculated total
         if (matched) return totalSqft;
-
-        // Fallback: just parse the first number if no units matched
         return parseFloat(str) || 0;
     };
 
     // --- 1. ROBUST INITIALIZATION ---
     const getInitialAreaData = () => {
         const saved = layout.areaDetails || {};
-        
-        // Use previously saved sqft total if available, else parse the raw string
         let initialTotal = parseFloat(saved.total);
         if (!initialTotal || isNaN(initialTotal)) {
             initialTotal = parseAreaToSqft(layout.totalArea);
         }
-
         return {
             total: initialTotal || 0,
             roadPct: saved.roadPct || 0,
@@ -76,8 +70,6 @@ const ExpenseCalculatorModal = ({ layout, onSave, onClose }) => {
     };
 
     const [areaData, setAreaData] = useState(getInitialAreaData());
-    
-    // Determine Step: If we have a total area, jump to Step 2
     const [step, setStep] = useState(areaData.total > 0 ? 2 : 1);
 
     // --- STEP 1 STATE (Inputs) ---
@@ -122,10 +114,7 @@ const ExpenseCalculatorModal = ({ layout, onSave, onClose }) => {
 
     // --- EFFECT: Live Calculations (Step 2) ---
     useEffect(() => {
-        // A. Area Calculation
         const totalA = parseFloat(areaData.total) || 0;
-        
-        // Ensure values are numbers for calculation
         const deductionsPct = 
             (parseFloat(areaData.roadPct) || 0) + 
             (parseFloat(areaData.parkPct) || 0) + 
@@ -135,12 +124,10 @@ const ExpenseCalculatorModal = ({ layout, onSave, onClose }) => {
         const nonSellableSqft = totalA * (deductionsPct / 100);
         const sellable = Math.max(0, totalA - nonSellableSqft);
 
-        // B. Expense Calculation
         const stdTotal = Object.values(standardExpenses).reduce((a, b) => a + (parseFloat(b) || 0), 0);
         const customTotal = customExpenses.reduce((a, item) => a + (parseFloat(item.amount) || 0), 0);
         const grandTotal = stdTotal + customTotal;
 
-        // C. Final Metric
         const perSqft = sellable > 0 ? (grandTotal / sellable) : 0;
 
         setMetrics({
@@ -152,7 +139,6 @@ const ExpenseCalculatorModal = ({ layout, onSave, onClose }) => {
 
 
     // --- HANDLERS ---
-
     const handleSetupContinue = (e) => {
         e.preventDefault();
         if (calculatedTotalSqft <= 0) return alert("Please enter a valid total area");
@@ -275,7 +261,7 @@ const ExpenseCalculatorModal = ({ layout, onSave, onClose }) => {
                                             <input 
                                                 type="number" 
                                                 className="bg-transparent w-full text-right text-sm text-white outline-none" 
-                                                value={areaData[field.k] === 0 ? '' : areaData[field.k]} // Allow empty input for UX
+                                                value={areaData[field.k] === 0 ? '' : areaData[field.k]} 
                                                 placeholder="0"
                                                 onChange={e => setAreaData({...areaData, [field.k]: e.target.value})}
                                             />
@@ -326,13 +312,21 @@ const ExpenseCalculatorModal = ({ layout, onSave, onClose }) => {
                                                 <label className="text-[10px] text-gray-500 uppercase font-bold mb-1 block">
                                                     {key.replace(/([A-Z])/g, ' $1').trim()}
                                                 </label>
-                                                <div className="flex items-center bg-black/40 border border-white/10 rounded-lg px-3 py-2 focus-within:border-blue-500 transition">
-                                                    <IndianRupee size={12} className="text-gray-500 mr-2"/>
-                                                    <input type="number" className="bg-transparent w-full text-sm text-white outline-none" 
-                                                        value={standardExpenses[key] === 0 ? '' : standardExpenses[key]} 
-                                                        placeholder="0"
-                                                        onChange={e => setStandardExpenses({...standardExpenses, [key]: e.target.value})}/>
+                                                <div className="flex flex-col bg-black/40 border border-white/10 rounded-lg px-3 py-2 focus-within:border-blue-500 transition">
+                                                    <div className="flex items-center">
+                                                        <IndianRupee size={12} className="text-gray-500 mr-2"/>
+                                                        <input type="number" className="bg-transparent w-full text-sm text-white outline-none" 
+                                                            value={standardExpenses[key] === 0 ? '' : standardExpenses[key]} 
+                                                            placeholder="0"
+                                                            onChange={e => setStandardExpenses({...standardExpenses, [key]: e.target.value})}/>
+                                                    </div>
                                                 </div>
+                                                {/* MONEY IN WORDS DISPLAY */}
+                                                {standardExpenses[key] > 0 && (
+                                                    <p className="text-[10px] text-blue-400 mt-1 italic capitalize pl-1">
+                                                        {numberToWords(standardExpenses[key])}
+                                                    </p>
+                                                )}
                                             </div>
                                         ))}
                                     </div>
@@ -344,17 +338,25 @@ const ExpenseCalculatorModal = ({ layout, onSave, onClose }) => {
                                         <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">Other Expenses</h3>
                                         <button onClick={addCustomExpense} className="text-[10px] text-blue-400 hover:text-white flex items-center gap-1 font-bold"><Plus size={12}/> Add Item</button>
                                     </div>
-                                    <div className="space-y-2">
+                                    <div className="space-y-4">
                                         {customExpenses.map((item) => (
-                                            <div key={item.id} className="flex gap-2">
-                                                <input type="text" placeholder="Expense Name" className="flex-1 bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-blue-500"
-                                                    value={item.name} onChange={e => updateCustomExpense(item.id, 'name', e.target.value)} />
-                                                <div className="flex items-center bg-black/40 border border-white/10 rounded-lg px-3 py-2 w-32 focus-within:border-blue-500">
-                                                    <IndianRupee size={12} className="text-gray-500 mr-1"/>
-                                                    <input type="number" placeholder="0" className="bg-transparent w-full text-sm text-white outline-none"
-                                                        value={item.amount} onChange={e => updateCustomExpense(item.id, 'amount', e.target.value)} />
+                                            <div key={item.id} className="flex flex-col">
+                                                <div className="flex gap-2">
+                                                    <input type="text" placeholder="Expense Name" className="flex-1 bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-blue-500"
+                                                        value={item.name} onChange={e => updateCustomExpense(item.id, 'name', e.target.value)} />
+                                                    <div className="flex items-center bg-black/40 border border-white/10 rounded-lg px-3 py-2 w-32 focus-within:border-blue-500">
+                                                        <IndianRupee size={12} className="text-gray-500 mr-1"/>
+                                                        <input type="number" placeholder="0" className="bg-transparent w-full text-sm text-white outline-none"
+                                                            value={item.amount === 0 ? '' : item.amount} onChange={e => updateCustomExpense(item.id, 'amount', e.target.value)} />
+                                                    </div>
+                                                    <button onClick={() => removeCustomExpense(item.id)} className="p-2 text-gray-600 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition"><Trash2 size={16}/></button>
                                                 </div>
-                                                <button onClick={() => removeCustomExpense(item.id)} className="p-2 text-gray-600 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition"><Trash2 size={16}/></button>
+                                                {/* MONEY IN WORDS FOR CUSTOM EXPENSES */}
+                                                {item.amount > 0 && (
+                                                    <p className="text-[10px] text-blue-400 mt-1 italic capitalize pl-1">
+                                                        {numberToWords(item.amount)}
+                                                    </p>
+                                                )}
                                             </div>
                                         ))}
                                     </div>
